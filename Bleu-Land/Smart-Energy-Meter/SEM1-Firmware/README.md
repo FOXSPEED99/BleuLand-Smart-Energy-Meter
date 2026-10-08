@@ -29,10 +29,15 @@ The firmware picks the right pins and CT values from the board you select; you d
 - **Local web page and JSON API** on your home network, for the app, Home Assistant, and calibration on the bench.
 - **Metering in its own high-priority task.** Network work can never make it miss packets. A watchdog restarts the meter if it ever hangs.
 
-Coming in the next stages:
+- **Cloud link (stage 2).**
+  - Once online, the meter registers with the BleuLand Energy cloud (Supabase, Frankfurt) and sends live values every 10 s over HTTPS.
+  - It then uploads the 5-minute history it stored while offline, oldest first, until it has caught up.
+  - It only trusts the cloud's real certificates; the list is in `cloud_certs.h`.
+  - The cloud work runs in its own background task, so a slow connection never freezes anything else.
+  - Status shows on the web page, in `info`, and on the blue LED.
 
-- cloud upload (Supabase)
-- linking a meter to an account
+Coming next:
+
 - OTA updates from the cloud
 - MQTT / Home Assistant
 
@@ -119,6 +124,7 @@ The QR payload is fixed for each unit; it's created on the unit's first boot. In
 | slow blink (1 s on / 1 s off) | waiting for setup from the phone |
 | fast blink | connecting to the home WiFi |
 | on | connected |
+| on, with a short off-blink every 2 s | on WiFi, but the cloud can't be reached |
 | very fast flicker | button held ≥ 5 s: release now to reset WiFi |
 | on + ENERGY on | button held ≥ 15 s: release now for a factory reset |
 
@@ -214,9 +220,12 @@ Each app slot is 1.875 MB (the IDE's "Maximum is 1966080 bytes").
 
 | Board package | ESP32-C3 (production) | DevKit (prototype) |
 |---|---|---|
-| 3.3.12 | 1.47 MB (74%) | 1.83 MB (92%) |
-| 2.0.17 | 1.53 MB (77%) | 1.64 MB (83%) |
+| 3.3.12 | 1.61 MB (82%) | 1.96 MB (**99.5%**) |
+| 3.3.4 | 1.55 MB (79%) | 1.94 MB (98.6%) |
+| 2.0.17 | 1.70 MB (86%) | 1.82 MB (92%) |
 
-The production C3 has plenty of room for the cloud features. The DevKit on 3.x is tight because the classic ESP32's Bluetooth stack is large; it is only for development.
+- **The production C3 has room** for the next features: over-the-air updates, MQTT.
+- **The classic-ESP32 DevKit is nearly full on core 3.x.** Its Bluetooth stack is about 0.8 MB, and the HTTPS cloud link added about 130 KB.
+- For further development, use an **ESP32-C3 DevKit**. It's cheap, and it's the chip the product ships with.
 - Most of this is the Bluetooth stack used for WiFi setup.
 - The cloud features of stage 2 should still fit on the C3. The DevKit is only for development.

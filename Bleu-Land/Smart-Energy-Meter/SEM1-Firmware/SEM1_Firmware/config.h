@@ -36,3 +36,12 @@ constexpr uint32_t BUTTON_FACTORY_RESET_MS = 15000;  // hold: also forget owner/
 
 // Anything before this is treated as "clock not set" (2024-01-01).
 constexpr uint32_t MIN_VALID_UNIX = 1704067200;
+
+// ---------- cloud (Supabase project "bleuland-energy", Frankfurt) ----------
+// The publishable key is meant to be public: the meter proves who it is with
+// its own secret, and the database only accepts that through two functions.
+#define CLOUD_URL "https://rmgzpxwpowwzqewmiyaw.supabase.co"
+#define CLOUD_KEY "sb_publishable_2_MDRTqxogkVNA97djRs3Q_J3PrFZ7_"
+constexpr uint32_t CLOUD_LIVE_S = 10;          // live values every 10 s
+constexpr size_t CLOUD_BATCH = 48;             // history records per upload (4 h)
+constexpr uint32_t CLOUD_RETRY_MAX_S = 300;    // back-off limit when the cloud is down

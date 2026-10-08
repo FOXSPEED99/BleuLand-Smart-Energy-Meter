@@ -6,6 +6,7 @@
 
 #include "app.h"
 #include "board.h"
+#include "cloud.h"
 #include "config.h"
 #include "net.h"
 #include "settings.h"
@@ -81,7 +82,11 @@ void handleInfo() {
   lg["oldest"] = app::log().oldestSeq();
   lg["capacity"] = app::log().capacity();
   lg["uploaded"] = app::uploadedSeq();
-  d["claimed"] = s.claimCode.length() > 0;
+  JsonObject cl = d["cloud"].to<JsonObject>();
+  cl["state"] = cloud::stateName();
+  cl["claimed"] = cloud::claimed();
+  cl["lastOk"] = cloud::lastOkUnix();
+  cl["error"] = cloud::lastError();
   sendJson(d);
 }
 
@@ -151,7 +156,9 @@ async function tick(){
    ' ('+x.timeSrc+') &middot; RTC '+(x.rtc.present?'ok':'MISSING')+
    '<br>Cal V/I/P '+f(x.cal.v,4)+' / '+f(x.cal.i,4)+' / '+f(x.cal.p,4)+' &middot; energy from '+x.energySrc+
    ' (other method since boot '+x.altKwhBoot+' kWh)<br>History log: next #'+x.log.next+' of '+x.log.capacity+
-   '<br>WiFi '+x.ip+' ('+x.rssi+' dBm) &middot; free heap '+x.heap;
+   '<br>WiFi '+x.ip+' ('+x.rssi+' dBm) &middot; free heap '+x.heap+
+   '<br>Cloud: '+x.cloud.state+(x.cloud.claimed?' (in an account)':' (not added to an account yet)')+
+   ' &middot; uploaded to #'+x.log.uploaded+(x.cloud.error&&x.cloud.state!='ok'?'<br>'+x.cloud.error:'');
    $('raw').textContent=x.hlw.raw;}
  }catch(e){}
  setTimeout(tick,1000);
