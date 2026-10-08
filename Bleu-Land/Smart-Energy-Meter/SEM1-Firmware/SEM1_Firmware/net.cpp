@@ -6,12 +6,18 @@
 #include <esp_arduino_version.h>
 #include <esp_wifi.h>
 
+// Tell the Arduino core that this sketch uses Bluetooth. Otherwise the core
+// frees the Bluetooth memory at power-up (before setup() runs) and phone
+// setup fails. btInUse() works on every board-package version (2.0.17 and all
+// 3.x); the newest 3.3.x versions also look for the header below.
+#if __has_include(<esp32-hal-alloc-ble-mem.h>)
+#include <esp32-hal-alloc-ble-mem.h>
+#endif
+extern "C" bool btInUse() { return true; }  // C name: the core is C code
+
 // Espressif renamed the provisioning component between the two board-package
 // generations (same phone protocol). These names cover both.
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
-// Core 3.x frees the Bluetooth memory at boot unless a sketch says it uses
-// BLE; this header says so. Without it, BLE setup would fail on the board.
-#include <esp32-hal-alloc-ble-mem.h>
 #include <network_provisioning/manager.h>
 #include <network_provisioning/scheme_ble.h>
 using prov_config_t = network_prov_mgr_config_t;
