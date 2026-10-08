@@ -142,6 +142,7 @@ Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
 - local API (`/api/live`, `/api/info`, `/api/cal`)
 - serial console
 - WiFi saved by other firmware is ignored: NVS flag `wifiok` is set only on PROV_CRED_SUCCESS; without it the stored STA config is erased and BLE setup starts (Fox's DevKit had the test sketch's network saved and never entered setup)
+- core 3.x: net::begin() must call `WiFi.STA.begin(false)` (not `wifiLowLevelInit`) or the sketch never gets ARDUINO_EVENT_WIFI_STA_GOT_IP and the hostname stays "espressif" (seen on Fox's DevKit: joined the hotspot, firmware kept retrying); loop() also falls back to WiFi.status()
 - 15 PC unit tests
 
 Next stages:

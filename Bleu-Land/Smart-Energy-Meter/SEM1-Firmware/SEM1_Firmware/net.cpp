@@ -67,7 +67,6 @@ bool mdnsStarted = false;
 volatile bool provActive = false;  // phone setup running: it manages the WiFi itself
 uint32_t lastRetryMs = 0;
 uint32_t reconnectAtMs = 0;
-String savedSsid;
 
 String storedSsid() {
   wifi_config_t conf = {};
@@ -153,7 +152,14 @@ void begin() {
   host.toLowerCase();  // "sem1-a1b2c3" -> http://sem1-a1b2c3.local
   WiFi.onEvent(onEvent);
   WiFi.setHostname(host.c_str());
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  // Sets up the Arduino station interface (IP events, hostname) without
+  // connecting yet. Without it, core 3.x joins the WiFi but never reports
+  // "got IP" to the sketch. Same call Espressif's WiFiProv uses.
+  WiFi.STA.begin(false);
+#else
   wifiLowLevelInit(true);
+#endif
 }
 
 void startProvisioningOrConnect() {
@@ -198,8 +204,7 @@ void startProvisioningOrConnect() {
     netState = NetState::Connecting;
     esp_wifi_start();
     prov_deinit();
-    savedSsid = storedSsid();
-    Serial.printf("[net] connecting to saved WiFi \"%s\"\n", savedSsid.c_str());
+    Serial.printf("[net] connecting to saved WiFi \"%s\"\n", storedSsid().c_str());
     Serial.println("[net] (to set up a different WiFi: hold BOOT 5 s, or type wifi-reset)");
     WiFi.setSleep(false);  // no modem sleep: smoother live data
     WiFi.begin();          // saved network
@@ -209,13 +214,18 @@ void startProvisioningOrConnect() {
 
 void loop() {
   uint32_t now = millis();
+  // Safety net: if the "got IP" event was ever missed, notice it here.
+  if (!gotIp && WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
+    gotIp = true;
+    netState = NetState::Online;
+  }
   // Router off or out of range: try again every 30 s. Only the station runs
   // (no access point), so this can't freeze anything. Stop the current
   // attempt first, then start a new one a moment later (starting while one is
   // still running gives "sta is connecting" errors).
   if (!provActive && netState == NetState::Connecting && !gotIp && now - lastRetryMs > 30000) {
     lastRetryMs = now;
-    Serial.printf("[net] can't reach WiFi \"%s\" yet, retrying\n", savedSsid.c_str());
+    Serial.printf("[net] can't reach WiFi \"%s\" yet, retrying\n", storedSsid().c_str());
     WiFi.disconnect();
     reconnectAtMs = now + 500;
     if (!reconnectAtMs) reconnectAtMs = 1;
