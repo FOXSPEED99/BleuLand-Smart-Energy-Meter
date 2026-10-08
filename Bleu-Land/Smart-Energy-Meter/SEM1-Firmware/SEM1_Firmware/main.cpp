@@ -27,9 +27,6 @@
 #include "net.h"
 #include "settings.h"
 
-#if ESP_ARDUINO_VERSION_MAJOR != 2
-#error "SEM-1 needs board package 'esp32 by Espressif Systems' version 2.0.17 (Tools > Board > Boards Manager)"
-#endif
 
 using namespace sem1;
 
@@ -330,7 +327,7 @@ void sem1Setup() {
   delay(50);
   Serial.printf("\nSEM-1 firmware %s (%s)\n", SEM1_FW_VERSION, SEM1_HW_NAME);
 
-  // The IDE's size check (1.9 MB) is looser than our app slot (1.75 MB).
+  // Safety net in case partitions.csv and the IDE's Partition Scheme ever differ.
   const esp_partition_t* slot = esp_ota_get_running_partition();
   if (slot && ESP.getSketchSize() > slot->size)
     Serial.println("!!! FIRMWARE TOO BIG FOR ITS FLASH SLOT: OTA updates will break !!!");
@@ -353,7 +350,7 @@ void sem1Setup() {
   }
 
   logOk = logFlash.begin("datalog") && dataLog.begin(&logFlash);
-  Serial.printf("[log] %s, next record #%u\n", logOk ? "ok" : "MISSING PARTITION", dataLog.nextSeq());
+  Serial.printf("[log] %s, next record #%u\n", logOk ? "ok" : "MISSING PARTITION", (unsigned)dataLog.nextSeq());
 
   applyCoeffs();
   restoreEnergy();

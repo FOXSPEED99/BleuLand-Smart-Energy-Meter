@@ -127,14 +127,14 @@ Fox chose (Oct 2026):
 
 - **Cloud:** Supabase (org "BLEU LAND"); make a new project for SEM-1 when the cloud stage starts, and ask before any paid plan.
 - **App:** Flutter (Android, iOS, web, desktop from one codebase).
-- **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **2.0.17**, + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino` (only setup()/loop() calling sem1Setup()/sem1Loop() in main.cpp); all code files sit flat in the sketch folder so Fox sees them as IDE tabs (keep it that way); board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically (choose Partition Scheme "Minimal SPIFFS" only to raise the IDE size limit). PC tests: `sh test/run_tests.sh`.
+- **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **3.x** (tested 3.3.12; Fox has 3.x; 2.0.17 also still compiles via the `ESP_ARDUINO_VERSION_MAJOR` shims in net.cpp, incl. `esp32-hal-alloc-ble-mem.h` so 3.x keeps BLE memory), + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino` (only setup()/loop() calling sem1Setup()/sem1Loop() in main.cpp); all code files sit flat in the sketch folder so Fox sees them as IDE tabs (keep it that way); board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically; its app slots (2 x 0x1E0000) equal "Minimal SPIFFS" so the IDE size check is exact. Sizes on 3.3.12: C3 1.47 MB, DevKit 1.83 MB of 1.875 MB (tight: watch it in stage 2). PC tests: `sh test/run_tests.sh`.
 - **Order:** firmware first, then cloud, then app.
 
 Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
 
 - metering task
 - energy counter backed up in DS1307 RAM
-- 5-min history ring in a raw flash partition (~69 days)
+- 5-min history ring in a raw flash partition (128 KB, ~22 days)
 - NTP + RTC clock (UTC)
 - ESP BLE provisioning (security 1, PoP from the QR) with the `sem1-claim` endpoint for account linking
 - LEDs per the front label: white = ENERGY 1000 imp/kWh, blue = WiFi

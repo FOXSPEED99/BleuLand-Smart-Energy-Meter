@@ -26,8 +26,8 @@
     Partition Scheme "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
     USB CDC On Boot  "Enabled",  Flash Mode "DIO"
 
-  Needs: board package "esp32 by Espressif Systems" 2.0.17 and the
-  "ArduinoJson" library 7.x (see README.md).
+  Needs: board package "esp32 by Espressif Systems" 3.x (tested 3.3.12;
+  2.0.17 also works) and the "ArduinoJson" library 7.x (see README.md).
 */
 
 #include "sem1.h"

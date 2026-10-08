@@ -3,9 +3,49 @@
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
+#include <esp_arduino_version.h>
 #include <esp_wifi.h>
+
+// Espressif renamed the provisioning component between the two board-package
+// generations (same phone protocol). These names cover both.
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+// Core 3.x frees the Bluetooth memory at boot unless a sketch says it uses
+// BLE; this header says so. Without it, BLE setup would fail on the board.
+#include <esp32-hal-alloc-ble-mem.h>
+#include <network_provisioning/manager.h>
+#include <network_provisioning/scheme_ble.h>
+using prov_config_t = network_prov_mgr_config_t;
+using prov_handler_t = network_prov_event_handler_t;
+#define PROV_SCHEME_BLE network_prov_scheme_ble
+#define PROV_HANDLER_FREE_BTDM NETWORK_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+#define PROV_HANDLER_NONE NETWORK_PROV_EVENT_HANDLER_NONE
+#define PROV_SECURITY_1 NETWORK_PROV_SECURITY_1
+#define prov_init network_prov_mgr_init
+#define prov_deinit network_prov_mgr_deinit
+#define prov_is_provisioned network_prov_mgr_is_wifi_provisioned
+#define prov_set_uuid network_prov_scheme_ble_set_service_uuid
+#define prov_endpoint_create network_prov_mgr_endpoint_create
+#define prov_endpoint_register network_prov_mgr_endpoint_register
+#define prov_start network_prov_mgr_start_provisioning
+#define prov_reset_on_failure network_prov_mgr_reset_wifi_sm_state_on_failure
+#else
 #include <wifi_provisioning/manager.h>
 #include <wifi_provisioning/scheme_ble.h>
+using prov_config_t = wifi_prov_mgr_config_t;
+using prov_handler_t = wifi_prov_event_handler_t;
+#define PROV_SCHEME_BLE wifi_prov_scheme_ble
+#define PROV_HANDLER_FREE_BTDM WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+#define PROV_HANDLER_NONE WIFI_PROV_EVENT_HANDLER_NONE
+#define PROV_SECURITY_1 WIFI_PROV_SECURITY_1
+#define prov_init wifi_prov_mgr_init
+#define prov_deinit wifi_prov_mgr_deinit
+#define prov_is_provisioned wifi_prov_mgr_is_provisioned
+#define prov_set_uuid wifi_prov_scheme_ble_set_service_uuid
+#define prov_endpoint_create wifi_prov_mgr_endpoint_create
+#define prov_endpoint_register wifi_prov_mgr_endpoint_register
+#define prov_start wifi_prov_mgr_start_provisioning
+#define prov_reset_on_failure wifi_prov_mgr_reset_sm_state_on_failure
+#endif
 
 #include "config.h"
 #include "settings.h"
@@ -62,7 +102,7 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t) {
     case ARDUINO_EVENT_PROV_CRED_FAIL:
       // Wrong password or network not found: let the app try again.
       Serial.println("[net] could not join that WiFi, waiting for new details");
-      wifi_prov_mgr_reset_sm_state_on_failure();
+      prov_reset_on_failure();
       netState = NetState::Setup;
       break;
     case ARDUINO_EVENT_PROV_CRED_SUCCESS:
@@ -94,37 +134,37 @@ void begin() {
 }
 
 void startProvisioningOrConnect() {
-  wifi_prov_mgr_config_t cfg = {};
-  cfg.scheme = wifi_prov_scheme_ble;
-  wifi_prov_event_handler_t freeBt = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM;
+  prov_config_t cfg = {};
+  cfg.scheme = PROV_SCHEME_BLE;
+  prov_handler_t freeBt = PROV_HANDLER_FREE_BTDM;
   cfg.scheme_event_handler = freeBt;  // release BT memory once setup is over
-  wifi_prov_event_handler_t none = WIFI_PROV_EVENT_HANDLER_NONE;
+  prov_handler_t none = PROV_HANDLER_NONE;
   cfg.app_event_handler = none;
 
-  if (wifi_prov_mgr_init(cfg) != ESP_OK) {
+  if (prov_init(cfg) != ESP_OK) {
     Serial.println("[net] provisioning init failed, trying saved WiFi");
     WiFi.begin();
     return;
   }
   bool provisioned = false;
-  wifi_prov_mgr_is_provisioned(&provisioned);
+  prov_is_provisioned(&provisioned);
 
   if (!provisioned) {
     const Identity& id = settings::identity();
     netState = NetState::Setup;
-    wifi_prov_scheme_ble_set_service_uuid(serviceUuid);
-    wifi_prov_mgr_endpoint_create("sem1-claim");
-    if (wifi_prov_mgr_start_provisioning(WIFI_PROV_SECURITY_1, id.pop.c_str(), id.bleName.c_str(), nullptr) != ESP_OK) {
+    prov_set_uuid(serviceUuid);
+    prov_endpoint_create("sem1-claim");
+    if (prov_start(PROV_SECURITY_1, id.pop.c_str(), id.bleName.c_str(), nullptr) != ESP_OK) {
       Serial.println("[net] could not start BLE setup");
       return;
     }
-    wifi_prov_mgr_endpoint_register("sem1-claim", claimHandler, nullptr);
+    prov_endpoint_register("sem1-claim", claimHandler, nullptr);
     Serial.printf("[net] setup mode: BLE name %s\n", id.bleName.c_str());
     Serial.printf("[net] QR payload: %s\n", settings::qrPayload().c_str());
   } else {
     netState = NetState::Connecting;
     esp_wifi_start();
-    wifi_prov_mgr_deinit();
+    prov_deinit();
     WiFi.setSleep(false);  // no modem sleep: smoother live data
     WiFi.begin();          // saved network
     lastRetryMs = millis();
