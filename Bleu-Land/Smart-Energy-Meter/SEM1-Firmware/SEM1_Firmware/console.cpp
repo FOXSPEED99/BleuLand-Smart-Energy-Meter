@@ -28,9 +28,11 @@ void printInfo() {
                 l.reading.pf);
   Serial.printf("energy    %.4f kWh (other method since boot: %.4f kWh)\n", l.totalWh / 1000,
                 l.altWhBoot / 1000);
-  Serial.printf("hlw       good %u  bad %u  last %u ms ago\n", l.goodPackets, l.badPackets, l.packetAgeMs);
+  Serial.printf("hlw       good %u  bad %u  last %u ms ago\n", (unsigned)l.goodPackets, (unsigned)l.badPackets,
+                (unsigned)l.packetAgeMs);
   Serial.printf("cal       V %.5f  I %.5f  P %.5f  (KV %.3f KI %.4f)\n", s.calV, s.calI, s.calP, KV, KI);
-  Serial.printf("log       next #%u  capacity %u\n", app::log().nextSeq(), app::log().capacity());
+  Serial.printf("log       next #%u  capacity %u\n", (unsigned)app::log().nextSeq(),
+                (unsigned)app::log().capacity());
   Serial.printf("claimed   %s\n", s.claimCode.length() ? "code stored" : "no");
 }
 
@@ -44,7 +46,7 @@ void printLog(int n) {
   size_t got = app::log().readFrom(from, recs, n, &resume);
   for (size_t k = 0; k < got; k++) {
     const auto& r = recs[k];
-    Serial.printf("#%u ts %u  %.1f Wh  avg %u W  max %u W  %.1f V  flags %02X\n", r.seq, r.ts,
+    Serial.printf("#%u ts %u  %.1f Wh  avg %u W  max %u W  %.1f V  flags %02X\n", (unsigned)r.seq, (unsigned)r.ts,
                   r.energyDWh / 10.0, r.pAvgW, r.pMaxW, r.vAvgDV / 10.0, r.flags);
   }
   if (!got) Serial.println("(log empty)");

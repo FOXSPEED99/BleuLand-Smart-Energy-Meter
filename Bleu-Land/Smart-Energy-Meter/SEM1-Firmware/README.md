@@ -17,7 +17,7 @@ The firmware picks the right pins and CT values from the board you select; you d
   - it's saved every 10 s in the DS1307's battery-backed RAM, which doesn't wear out;
   - and every 5 minutes in the history log.
   - It's calculated from P × dt, the method proven on your bench. The HLW8032's own PF pulse counter is calculated alongside it, so you can compare both against a reference meter. Switch with `energy pf`.
-- **5-minute history in flash ("offline buffer").** About **69 days** of records: time, kWh counter, average power, peak power and voltage. When the cloud part is added, the meter uploads these, so no data is lost while the internet is down.
+- **5-minute history in flash ("offline buffer").** About **22 days** of records: time, kWh counter, average power, peak power and voltage. When the cloud part is added, the meter uploads these, so no data is lost while the internet is down. Even during a longer outage the kWh total stays correct; only the oldest 5-minute detail is overwritten.
 - **Clock.** Gets the time from the internet (NTP) when online and keeps the DS1307 correct. After a power cut with no internet, the DS1307 provides the time. Everything is stored in **UTC**, and the app converts to local time.
 - **WiFi setup from the phone over Bluetooth.** Nothing is hard-coded and there's no always-on access point, so the AP+STA freeze from the test firmware can't happen.
 - **LEDs as printed on the label:**
@@ -40,25 +40,26 @@ Coming in the next stages:
 
 You already have the Arduino IDE. Two things to add:
 
-1. **ESP32 board package, version 2.0.17.**
-   1. **Tools → Board → Boards Manager…**, search **esp32**.
-   2. In the entry **"esp32 by Espressif Systems"**, open the version drop-down, pick **2.0.17** and click **Install**. If a 3.x version is installed, this replaces it.
-   3. Why exactly 2.0.17: version 3.x changed the Bluetooth WiFi-setup code. If the wrong version is installed, the sketch stops with an error telling you to install 2.0.17.
+1. **ESP32 board package 3.x.**
+   - Check **Tools → Board → Boards Manager…**, search **esp32**: "esp32 by Espressif Systems" should show a **3.x** version installed (tested with **3.3.12**).
+   - If you already have 3.x, there's nothing to do.
+   - The older **2.0.17** also works, but stay on 3.x: it's the maintained version, and your other ESP32 projects use it too.
 2. **ArduinoJson library.** **Sketch → Include Library → Manage Libraries…**, search **ArduinoJson** (by Benoit Blanchon), install the newest **7.x**.
 
-Your old test firmware also builds fine on 2.0.17.
+Your old test firmware builds on 3.x as well.
 
 ## Build and flash the prototype
 
 1. **File → Open…** → open `SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino`.
-   - You'll only see one tab with instructions. The real code is in the `src` folder next to it, and the IDE compiles it automatically.
-   - To read or edit the code, open those files in any text editor; Notepad++ or VS Code are nicer than Notepad.
+   - The other files open as **tabs** along the top (`main.cpp`, `hlw8032.cpp`, …).
+   - When you press Upload, the IDE compiles **all** the tabs together.
+   - The `.ino` only has `setup()` and `loop()`; they call `sem1Setup()` / `sem1Loop()` in `main.cpp`, where the real start-up code is.
 2. In the **Tools** menu set:
    - **Board:** "ESP32 Dev Module" (under esp32)
    - **Partition Scheme:** "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
    - **Port:** your DevKit's COM port
 
-   Why the Partition Scheme matters: it only raises the IDE's size limit. The firmware is about 1.6 MB, which doesn't fit the IDE's default 1.2 MB limit. The flash layout actually used is our own `partitions.csv` in the sketch folder, which the IDE picks up automatically.
+   Why the Partition Scheme matters: the firmware is about 1.5–1.8 MB, which doesn't fit the default 1.2 MB limit. Our own `partitions.csv` in the sketch folder is what gets flashed (the IDE picks it up automatically), and its app slots are the same size as "Minimal SPIFFS", so the IDE's size check is exact.
 3. Click **Upload (→)**.
    - The first compile takes a few minutes; after that it's faster.
    - If the upload doesn't start, hold the DevKit's BOOT button while it says "Connecting…".
@@ -100,6 +101,16 @@ Our own app will do this later. Until then, Espressif's free test app speaks the
 5. The serial monitor prints the meter's address, e.g. `http://192.168.1.57 (http://sem1-a1b2c3.local)`. Open it in a browser on the same WiFi to see live values.
 
 The QR payload is fixed for each unit; it's created on the unit's first boot. In production, it's what gets printed on the front label's "SCAN TO PAIR" code.
+
+**Without a QR code:**
+1. In the app tap **I don't have a QR code**, then **CHANGE** next to "Prefix" and type `SEM1_`. The app only lists names starting with `PROV_` by default.
+2. Pick your meter, then type the 8-letter `pop` code when asked.
+
+**The app finds nothing?**
+- Check that the blue LED blinks **slowly** and the serial monitor shows `[net] setup mode: BLE name SEM1_...`.
+- If it says `connecting to saved WiFi` instead, the meter already has a network saved: type `wifi-reset` (or hold BOOT 5 s) to start setup again.
+- WiFi details left behind by other firmware, such as the test sketch, are ignored automatically.
+- On Android, Bluetooth **and** Location must be on to scan.
 
 ## LEDs
 
@@ -159,21 +170,21 @@ The decoder, energy maths and flash log (including power cuts in the middle of a
 ## Files
 
 ```
-SEM1_Firmware/SEM1_Firmware.ino   open this in the Arduino IDE (instructions only)
-SEM1_Firmware/partitions.csv      flash layout: 2 x 1.75 MB app slots (for safe OTA) + 392 KB history log
-SEM1_Firmware/src/
-  main.cpp          setup()/loop(): start-up, metering task, clock, history log, button
-  board.h           pin maps + CT values for both boards
-  config.h          timings and front-end coefficients
-  hlw8032.cpp       HLW8032 packet decoder          (plain C++, unit tested)
-  meter.cpp         1 s averages + energy counter   (plain C++, unit tested)
-  datalog.cpp       history ring buffer in flash    (plain C++, unit tested)
-  net.cpp           BLE WiFi setup + reconnect
-  local_api.cpp     web page + JSON API
-  rtc_ds1307.cpp    clock + energy backup in RTC RAM
-  settings.cpp      calibration, identity (device ID, QR code, cloud secret)
-  console.cpp       serial commands
-  leds.cpp          LED patterns
+SEM1_Firmware/                    the Arduino sketch: every file below opens as a tab
+  SEM1_Firmware.ino   setup() / loop(): open this one
+  partitions.csv      flash layout: 2 x 1.875 MB app slots (for safe OTA) + 128 KB history log + crash dump
+  main.cpp            sem1Setup()/sem1Loop(): start-up, metering task, clock, history log, button
+  board.h             pin maps + CT values for both boards
+  config.h            timings and front-end coefficients
+  hlw8032.cpp         HLW8032 packet decoder          (plain C++, unit tested)
+  meter.cpp           1 s averages + energy counter   (plain C++, unit tested)
+  datalog.cpp         history ring buffer in flash    (plain C++, unit tested)
+  net.cpp             BLE WiFi setup + reconnect
+  local_api.cpp       web page + JSON API
+  rtc_ds1307.cpp      clock + energy backup in RTC RAM
+  settings.cpp        calibration, identity (device ID, QR code, cloud secret)
+  console.cpp         serial commands
+  leds.cpp            LED patterns
 test/               PC unit tests
 ```
 
@@ -183,7 +194,7 @@ test/               PC unit tests
    - GPIO9 is also the C3's "boot" pin, so the same button lets you re-flash a unit.
    - Without a button, a customer who changes their WiFi router can't re-pair the meter.
 2. **Bring out USB (GPIO18 = D−, GPIO19 = D+)** to a connector or test pads. The C3 has USB built in, so there's no CP2102/CH340 chip to buy, and it's how the factory flashes units.
-3. Proposed pins (in `src/board.h`, easy to change):
+3. Proposed pins (in `board.h`, easy to change):
 
    | Signal | GPIO |
    |---|---|
@@ -199,8 +210,13 @@ test/               PC unit tests
 
 ## Size budget
 
-- C3: 1.53 MB of its 1.75 MB slot (83%).
-- DevKit: 1.64 MB (89%).
-- The IDE shows a percentage of 1.9 MB; ignore that, the real limit is 1.75 MB. If the firmware ever grows past it, the meter prints a loud warning at start-up.
+Each app slot is 1.875 MB (the IDE's "Maximum is 1966080 bytes").
+
+| Board package | ESP32-C3 (production) | DevKit (prototype) |
+|---|---|---|
+| 3.3.12 | 1.47 MB (74%) | 1.83 MB (92%) |
+| 2.0.17 | 1.53 MB (77%) | 1.64 MB (83%) |
+
+The production C3 has plenty of room for the cloud features. The DevKit on 3.x is tight because the classic ESP32's Bluetooth stack is large; it is only for development.
 - Most of this is the Bluetooth stack used for WiFi setup.
 - The cloud features of stage 2 should still fit on the C3. The DevKit is only for development.

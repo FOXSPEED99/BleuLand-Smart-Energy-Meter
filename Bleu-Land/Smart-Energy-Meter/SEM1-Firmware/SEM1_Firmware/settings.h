@@ -26,6 +26,10 @@ void saveCalibration();
 void saveEnergySource();
 void saveClaimCode(const String& code);
 
+// True once the saved WiFi came from our own phone setup (not from other firmware).
+bool wifiFromSetup();
+void setWifiFromSetup(bool v);
+
 // Fallback energy storage when the board has no working RTC.
 uint64_t loadEnergyMilliWh();
 void saveEnergyMilliWh(uint64_t mwh);

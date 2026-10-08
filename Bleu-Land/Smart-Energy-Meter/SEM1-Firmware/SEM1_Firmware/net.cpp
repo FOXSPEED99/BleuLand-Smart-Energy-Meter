@@ -3,9 +3,57 @@
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
+#include <esp_arduino_version.h>
 #include <esp_wifi.h>
+
+// Tell the Arduino core that this sketch uses Bluetooth. Otherwise the core
+// frees the Bluetooth memory at power-up (before setup() runs) and phone
+// setup fails. btInUse() works on every board-package version (2.0.17 and all
+// 3.x); the newest 3.3.x versions also look for the header below.
+#if __has_include(<esp32-hal-alloc-ble-mem.h>)
+#include <esp32-hal-alloc-ble-mem.h>
+#endif
+extern "C" bool btInUse() { return true; }  // C name: the core is C code
+
+// Espressif renamed the provisioning component between the two board-package
+// generations (same phone protocol). These names cover both.
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+#include <network_provisioning/manager.h>
+#include <network_provisioning/scheme_ble.h>
+using prov_config_t = network_prov_mgr_config_t;
+using prov_handler_t = network_prov_event_handler_t;
+#define PROV_SCHEME_BLE network_prov_scheme_ble
+#define PROV_HANDLER_FREE_BTDM NETWORK_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+#define PROV_HANDLER_NONE NETWORK_PROV_EVENT_HANDLER_NONE
+#define PROV_SECURITY_1 NETWORK_PROV_SECURITY_1
+#define prov_init network_prov_mgr_init
+#define prov_deinit network_prov_mgr_deinit
+#define prov_is_provisioned network_prov_mgr_is_wifi_provisioned
+#define prov_set_uuid network_prov_scheme_ble_set_service_uuid
+#define prov_endpoint_create network_prov_mgr_endpoint_create
+#define prov_endpoint_register network_prov_mgr_endpoint_register
+#define prov_start network_prov_mgr_start_provisioning
+#define prov_reset_on_failure network_prov_mgr_reset_wifi_sm_state_on_failure
+#define prov_forget_wifi network_prov_mgr_reset_wifi_provisioning
+#else
 #include <wifi_provisioning/manager.h>
 #include <wifi_provisioning/scheme_ble.h>
+using prov_config_t = wifi_prov_mgr_config_t;
+using prov_handler_t = wifi_prov_event_handler_t;
+#define PROV_SCHEME_BLE wifi_prov_scheme_ble
+#define PROV_HANDLER_FREE_BTDM WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+#define PROV_HANDLER_NONE WIFI_PROV_EVENT_HANDLER_NONE
+#define PROV_SECURITY_1 WIFI_PROV_SECURITY_1
+#define prov_init wifi_prov_mgr_init
+#define prov_deinit wifi_prov_mgr_deinit
+#define prov_is_provisioned wifi_prov_mgr_is_provisioned
+#define prov_set_uuid wifi_prov_scheme_ble_set_service_uuid
+#define prov_endpoint_create wifi_prov_mgr_endpoint_create
+#define prov_endpoint_register wifi_prov_mgr_endpoint_register
+#define prov_start wifi_prov_mgr_start_provisioning
+#define prov_reset_on_failure wifi_prov_mgr_reset_sm_state_on_failure
+#define prov_forget_wifi wifi_prov_mgr_reset_provisioning
+#endif
 
 #include "config.h"
 #include "settings.h"
@@ -16,7 +64,16 @@ namespace {
 volatile NetState netState = NetState::Connecting;
 volatile bool gotIp = false;
 bool mdnsStarted = false;
+volatile bool provActive = false;  // phone setup running: it manages the WiFi itself
 uint32_t lastRetryMs = 0;
+uint32_t reconnectAtMs = 0;
+String savedSsid;
+
+String storedSsid() {
+  wifi_config_t conf = {};
+  esp_wifi_get_config(WIFI_IF_STA, &conf);
+  return String((const char*)conf.sta.ssid);
+}
 String host;
 
 // Espressif's default provisioning service UUID (what their apps expect).
@@ -52,6 +109,7 @@ esp_err_t claimHandler(uint32_t, const uint8_t* in, ssize_t inLen, uint8_t** out
 void onEvent(arduino_event_id_t event, arduino_event_info_t) {
   switch (event) {
     case ARDUINO_EVENT_PROV_START:
+      provActive = true;
       Serial.println("[net] BLE setup started, waiting for the app");
       netState = NetState::Setup;
       break;
@@ -62,11 +120,16 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t) {
     case ARDUINO_EVENT_PROV_CRED_FAIL:
       // Wrong password or network not found: let the app try again.
       Serial.println("[net] could not join that WiFi, waiting for new details");
-      wifi_prov_mgr_reset_sm_state_on_failure();
+      prov_reset_on_failure();
       netState = NetState::Setup;
       break;
     case ARDUINO_EVENT_PROV_CRED_SUCCESS:
       Serial.println("[net] setup done");
+      settings::setWifiFromSetup(true);  // these details came from our own phone setup
+      break;
+    case ARDUINO_EVENT_PROV_END:
+      provActive = false;
+      lastRetryMs = millis();
       break;
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
       gotIp = true;
@@ -94,37 +157,50 @@ void begin() {
 }
 
 void startProvisioningOrConnect() {
-  wifi_prov_mgr_config_t cfg = {};
-  cfg.scheme = wifi_prov_scheme_ble;
-  wifi_prov_event_handler_t freeBt = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM;
+  prov_config_t cfg = {};
+  cfg.scheme = PROV_SCHEME_BLE;
+  prov_handler_t freeBt = PROV_HANDLER_FREE_BTDM;
   cfg.scheme_event_handler = freeBt;  // release BT memory once setup is over
-  wifi_prov_event_handler_t none = WIFI_PROV_EVENT_HANDLER_NONE;
+  prov_handler_t none = PROV_HANDLER_NONE;
   cfg.app_event_handler = none;
 
-  if (wifi_prov_mgr_init(cfg) != ESP_OK) {
+  if (prov_init(cfg) != ESP_OK) {
     Serial.println("[net] provisioning init failed, trying saved WiFi");
     WiFi.begin();
     return;
   }
   bool provisioned = false;
-  wifi_prov_mgr_is_provisioned(&provisioned);
+  prov_is_provisioned(&provisioned);
+
+  // WiFi details can be left in flash by other firmware (e.g. the test
+  // sketch's hard-coded network). Only trust ones that came through our own
+  // phone setup; otherwise forget them and start setup.
+  if (provisioned && !settings::wifiFromSetup()) {
+    Serial.printf("[net] ignoring WiFi \"%s\" saved by other firmware\n", storedSsid().c_str());
+    prov_forget_wifi();
+    provisioned = false;
+  }
 
   if (!provisioned) {
     const Identity& id = settings::identity();
     netState = NetState::Setup;
-    wifi_prov_scheme_ble_set_service_uuid(serviceUuid);
-    wifi_prov_mgr_endpoint_create("sem1-claim");
-    if (wifi_prov_mgr_start_provisioning(WIFI_PROV_SECURITY_1, id.pop.c_str(), id.bleName.c_str(), nullptr) != ESP_OK) {
+    provActive = true;
+    prov_set_uuid(serviceUuid);
+    prov_endpoint_create("sem1-claim");
+    if (prov_start(PROV_SECURITY_1, id.pop.c_str(), id.bleName.c_str(), nullptr) != ESP_OK) {
       Serial.println("[net] could not start BLE setup");
       return;
     }
-    wifi_prov_mgr_endpoint_register("sem1-claim", claimHandler, nullptr);
+    prov_endpoint_register("sem1-claim", claimHandler, nullptr);
     Serial.printf("[net] setup mode: BLE name %s\n", id.bleName.c_str());
     Serial.printf("[net] QR payload: %s\n", settings::qrPayload().c_str());
   } else {
     netState = NetState::Connecting;
     esp_wifi_start();
-    wifi_prov_mgr_deinit();
+    prov_deinit();
+    savedSsid = storedSsid();
+    Serial.printf("[net] connecting to saved WiFi \"%s\"\n", savedSsid.c_str());
+    Serial.println("[net] (to set up a different WiFi: hold BOOT 5 s, or type wifi-reset)");
     WiFi.setSleep(false);  // no modem sleep: smoother live data
     WiFi.begin();          // saved network
     lastRetryMs = millis();
@@ -133,11 +209,20 @@ void startProvisioningOrConnect() {
 
 void loop() {
   uint32_t now = millis();
-  if (netState == NetState::Connecting && !gotIp && now - lastRetryMs > 30000) {
-    // Router off or out of range: keep trying every 30 s. Only the station
-    // runs (no access point), so this can't freeze anything.
+  // Router off or out of range: try again every 30 s. Only the station runs
+  // (no access point), so this can't freeze anything. Stop the current
+  // attempt first, then start a new one a moment later (starting while one is
+  // still running gives "sta is connecting" errors).
+  if (!provActive && netState == NetState::Connecting && !gotIp && now - lastRetryMs > 30000) {
     lastRetryMs = now;
-    WiFi.reconnect();
+    Serial.printf("[net] can't reach WiFi \"%s\" yet, retrying\n", savedSsid.c_str());
+    WiFi.disconnect();
+    reconnectAtMs = now + 500;
+    if (!reconnectAtMs) reconnectAtMs = 1;
+  }
+  if (reconnectAtMs && (int32_t)(now - reconnectAtMs) >= 0) {
+    reconnectAtMs = 0;
+    if (!gotIp && !provActive) WiFi.begin();
   }
   static bool wasOnline = false;
   bool on = gotIp;
@@ -163,6 +248,7 @@ String hostname() { return host; }
 
 void forgetWifiAndRestart() {
   Serial.println("[net] forgetting WiFi and restarting into setup mode");
+  settings::setWifiFromSetup(false);
   WiFi.disconnect(true, true);  // erase the saved network
   delay(200);
   ESP.restart();

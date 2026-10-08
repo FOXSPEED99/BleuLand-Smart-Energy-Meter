@@ -127,20 +127,21 @@ Fox chose (Oct 2026):
 
 - **Cloud:** Supabase (org "BLEU LAND"); make a new project for SEM-1 when the cloud stage starts, and ask before any paid plan.
 - **App:** Flutter (Android, iOS, web, desktop from one codebase).
-- **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **2.0.17**, + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino`, all code in its `src/` folder; board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically (choose Partition Scheme "Minimal SPIFFS" only to raise the IDE size limit). PC tests: `sh test/run_tests.sh`.
+- **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **3.x** (tested 3.3.12; Fox has 3.x; 2.0.17 also compiles via the `ESP_ARDUINO_VERSION_MAJOR` shims in net.cpp; verified builds on 2.0.17, 3.3.4, 3.3.12). net.cpp defines `extern "C" bool btInUse(){return true;}` (plus `esp32-hal-alloc-ble-mem.h` only when it exists, 3.3.9+) so no core version frees BLE memory at boot; without it the 2.0.17 DevKit build linked the core's weak `false` version and BLE setup would have failed, + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino` (only setup()/loop() calling sem1Setup()/sem1Loop() in main.cpp); all code files sit flat in the sketch folder so Fox sees them as IDE tabs (keep it that way); board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically; its app slots (2 x 0x1E0000) equal "Minimal SPIFFS" so the IDE size check is exact. Sizes on 3.3.12: C3 1.47 MB, DevKit 1.83 MB of 1.875 MB (tight: watch it in stage 2). PC tests: `sh test/run_tests.sh`.
 - **Order:** firmware first, then cloud, then app.
 
 Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
 
 - metering task
 - energy counter backed up in DS1307 RAM
-- 5-min history ring in a raw flash partition (~69 days)
+- 5-min history ring in a raw flash partition (128 KB, ~22 days)
 - NTP + RTC clock (UTC)
 - ESP BLE provisioning (security 1, PoP from the QR) with the `sem1-claim` endpoint for account linking
 - LEDs per the front label: white = ENERGY 1000 imp/kWh, blue = WiFi
 - button 5 s / 15 s reset
 - local API (`/api/live`, `/api/info`, `/api/cal`)
 - serial console
+- WiFi saved by other firmware is ignored: NVS flag `wifiok` is set only on PROV_CRED_SUCCESS; without it the stored STA config is erased and BLE setup starts (Fox's DevKit had the test sketch's network saved and never entered setup)
 - 15 PC unit tests
 
 Next stages:
