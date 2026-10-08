@@ -125,7 +125,7 @@ Platforms: **Android, iOS and web/desktop**, ideally from **one codebase**.
 
 Fox chose (Oct 2026):
 
-- **Cloud:** Supabase (org "BLEU LAND"), free plan. Project **bleuland-energy** (ref `rmgzpxwpowwzqewmiyaw`, eu-central-1 Frankfurt, closest to Syria). An empty project "sem1" (ref `qzebqybpcjcuownytabd`, Mumbai) was created by mistake and is paused; Fox can delete it. Schema: `../SEM1-Cloud/supabase/migrations/` (apply_migration was cancelled twice at the permission prompt; not applied yet). Ask before any paid plan.
+- **Cloud:** Supabase (org "BLEU LAND"), free plan. Project **bleuland-energy** (ref `rmgzpxwpowwzqewmiyaw`, eu-central-1 Frankfurt, closest to Syria). An empty project "sem1" (ref `qzebqybpcjcuownytabd`, Mumbai) was created by mistake and is paused; Fox can delete it. Schema applied and verified; see `../SEM1-Cloud/README.md` (URL, publishable key, functions). The Supabase MCP `apply_migration` cancels any statement containing DELETE even when Fox approves, so keep DELETE out of migrations (`../SEM1-Cloud/pending/` holds SQL for Fox to paste in the dashboard). This sandbox can't reach supabase.co (proxy 403); Fox confirmed it's reachable from Syria without a VPN. Default tariff: 300 kWh at 6, then 14 new SYP/kWh per 2-month cycle. Ask before any paid plan.
 - **Market:** **Syria** first (not the Gulf): currency SYP, time zone Asia/Damascus, tariff brackets entered by the user (no guessed prices). App **English only** for now. App name **BleuLand Energy**, **dark theme only**.
 - **Scope (Fox):** the meter measures the whole house's consumption from the city grid, i.e. what's on the electricity bill. No generator/solar features.
 - **App:** Flutter (Android, iOS, web, desktop from one codebase).
