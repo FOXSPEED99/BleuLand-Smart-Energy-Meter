@@ -1,0 +1,57 @@
+name: bleuland_energy
+description: "BleuLand Energy: live home electricity monitor for the SEM-1 meter"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^3.4.3      # app state
+  go_router: ^18.0.2            # screen navigation
+  supabase_flutter: ^2.18.0     # cloud: login, data, live updates
+  fl_chart: ^1.2.0              # charts
+  intl: ^0.20.3                 # number and date formatting
+  shared_preferences: ^2.5.6    # small local settings (demo mode, last meter)
+  mobile_scanner: ^7.4.2        # QR code on the meter label
+  esp_provisioning_ble: ^1.1.0  # Espressif WiFi setup protocol (security 1 + PoP)
+  universal_ble: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  fonts:
+    # Poppins: the typeface on the SEM-1 front label (bundled, works offline)
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
+
+# App icon: the bolt mark from the SEM-1 front label (dart run flutter_launcher_icons)
+flutter_launcher_icons:
+  image_path: assets/images/icon.png
+  android: true
+  adaptive_icon_background: "#0E1114"
+  adaptive_icon_foreground: assets/images/icon_foreground.png
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    background_color: "#0E1114"
+    theme_color: "#0E1114"

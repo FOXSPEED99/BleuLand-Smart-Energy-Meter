@@ -17,6 +17,7 @@
 #include "app.h"
 #include "sem1.h"
 #include "board.h"
+#include "cloud.h"
 #include "config.h"
 #include "console.h"
 #include "flash_partition.h"
@@ -41,6 +42,7 @@ SemaphoreHandle_t mtx;
 RtcDs1307 rtcChip;
 PartitionFlash logFlash;
 DataLog dataLog;
+SemaphoreHandle_t logMtx;  // the main loop writes the log, the cloud task reads it
 bool logOk = false;
 uint32_t uploadedSeqVal = 0;
 
@@ -194,7 +196,9 @@ void logLoop() {
   rec.pMaxW = (uint16_t)constrain(st.pMax + 0.5f, 0.0f, 65535.0f);
   rec.vAvgDV = (uint16_t)constrain(st.vAvg() * 10.0f + 0.5f, 0.0f, 65535.0f);
   rec.flags = st.flags | pendingFlags | (timeSrc == TimeSource::Ntp ? 0 : kLogTimeRtc);
+  xSemaphoreTake(logMtx, portMAX_DELAY);
   uint32_t seq = dataLog.append(rec);
+  xSemaphoreGive(logMtx);
   if (!seq) Serial.println("[log] write failed");
 
   pendingFlags = 0;
@@ -235,7 +239,11 @@ void buttonLoop() {
   switch (net::state()) {
     case NetState::Setup: leds::setWifi(WifiLed::Setup); break;
     case NetState::Connecting: leds::setWifi(WifiLed::Connecting); break;
-    case NetState::Online: leds::setWifi(WifiLed::Online); break;
+    case NetState::Online:
+      leds::setWifi(cloud::state() == CloudState::Error || cloud::state() == CloudState::AuthError
+                        ? WifiLed::CloudDown
+                        : WifiLed::Online);
+      break;
   }
 }
 }  // namespace
@@ -274,6 +282,18 @@ const char* timeSourceName() {
 RtcDs1307& rtc() { return rtcChip; }
 DataLog& log() { return dataLog; }
 uint32_t uploadedSeq() { return uploadedSeqVal; }
+void setUploadedSeq(uint32_t seq) { uploadedSeqVal = seq; }  // saved to the RTC every 10 s
+
+size_t readLog(uint32_t fromSeq, LogRecord* out, size_t max, uint32_t* resumeSeq) {
+  if (!logOk) {
+    if (resumeSeq) *resumeSeq = fromSeq;
+    return 0;
+  }
+  xSemaphoreTake(logMtx, portMAX_DELAY);
+  size_t n = dataLog.readFrom(fromSeq, out, max, resumeSeq);
+  xSemaphoreGive(logMtx);
+  return n;
+}
 
 String calibrate(char what, float target) {
   Reading r = snapshot().reading;
@@ -333,6 +353,7 @@ void sem1Setup() {
     Serial.println("!!! FIRMWARE TOO BIG FOR ITS FLASH SLOT: OTA updates will break !!!");
 
   mtx = xSemaphoreCreateMutex();
+  logMtx = xSemaphoreCreateMutex();
   settings::begin();
   Serial.printf("Device %s\n", settings::identity().deviceId.c_str());
 
@@ -362,6 +383,7 @@ void sem1Setup() {
   net::begin();
   net::startProvisioningOrConnect();
   localApi::begin();
+  cloud::begin();
   console::begin();
   enableLoopWDT();
 }

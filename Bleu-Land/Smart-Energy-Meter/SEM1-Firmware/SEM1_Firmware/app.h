@@ -28,7 +28,11 @@ const char* timeSourceName();
 
 RtcDs1307& rtc();
 sem1::DataLog& log();
-uint32_t uploadedSeq();
+uint32_t uploadedSeq();               // last history record the cloud confirmed
+void setUploadedSeq(uint32_t seq);
+
+// Thread-safe read of the history log (the cloud task uses this).
+size_t readLog(uint32_t fromSeq, sem1::LogRecord* out, size_t max, uint32_t* resumeSeq);
 
 // Calibration against a reference meter. `what` is 'v', 'i' or 'p'; `target`
 // is what the reference shows right now. Returns a message for the user.

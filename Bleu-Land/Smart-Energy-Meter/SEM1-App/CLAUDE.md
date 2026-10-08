@@ -125,7 +125,9 @@ Platforms: **Android, iOS and web/desktop**, ideally from **one codebase**.
 
 Fox chose (Oct 2026):
 
-- **Cloud:** Supabase (org "BLEU LAND"); make a new project for SEM-1 when the cloud stage starts, and ask before any paid plan.
+- **Cloud:** Supabase (org "BLEU LAND"), free plan. Project **bleuland-energy** (ref `rmgzpxwpowwzqewmiyaw`, eu-central-1 Frankfurt, closest to Syria). An empty project "sem1" (ref `qzebqybpcjcuownytabd`, Mumbai) was created by mistake and is paused; Fox can delete it. Schema applied and verified; see `../SEM1-Cloud/README.md` (URL, publishable key, functions). The Supabase MCP `apply_migration` cancels any statement containing DELETE even when Fox approves, so keep DELETE out of migrations (`../SEM1-Cloud/pending/` holds SQL for Fox to paste in the dashboard). This sandbox can't reach supabase.co (proxy 403); Fox confirmed it's reachable from Syria without a VPN. Default tariff: 300 kWh at 6, then 14 new SYP/kWh per 2-month cycle. Ask before any paid plan.
+- **Market:** **Syria** first (not the Gulf): currency SYP, time zone Asia/Damascus, tariff brackets entered by the user (no guessed prices). App **English only** for now. App name **BleuLand Energy**, **dark theme only**.
+- **Scope (Fox):** the meter measures the whole house's consumption from the city grid, i.e. what's on the electricity bill. No generator/solar features.
 - **App:** Flutter (Android, iOS, web, desktop from one codebase).
 - **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **3.x** (tested 3.3.12; Fox has 3.x; 2.0.17 also compiles via the `ESP_ARDUINO_VERSION_MAJOR` shims in net.cpp; verified builds on 2.0.17, 3.3.4, 3.3.12). net.cpp defines `extern "C" bool btInUse(){return true;}` (plus `esp32-hal-alloc-ble-mem.h` only when it exists, 3.3.9+) so no core version frees BLE memory at boot; without it the 2.0.17 DevKit build linked the core's weak `false` version and BLE setup would have failed, + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino` (only setup()/loop() calling sem1Setup()/sem1Loop() in main.cpp); all code files sit flat in the sketch folder so Fox sees them as IDE tabs (keep it that way); board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically; its app slots (2 x 0x1E0000) equal "Minimal SPIFFS" so the IDE size check is exact. Sizes on 3.3.12: C3 1.47 MB, DevKit 1.83 MB of 1.875 MB (tight: watch it in stage 2). PC tests: `sh test/run_tests.sh`.
 - **Order:** firmware first, then cloud, then app.
@@ -142,7 +144,11 @@ Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
 - local API (`/api/live`, `/api/info`, `/api/cal`)
 - serial console
 - WiFi saved by other firmware is ignored: NVS flag `wifiok` is set only on PROV_CRED_SUCCESS; without it the stored STA config is erased and BLE setup starts (Fox's DevKit had the test sketch's network saved and never entered setup)
+- core 3.x: net::begin() must call `WiFi.STA.begin(false)` (not `wifiLowLevelInit`) or the sketch never gets ARDUINO_EVENT_WIFI_STA_GOT_IP and the hostname stays "espressif" (seen on Fox's DevKit: joined the hotspot, firmware kept retrying); loop() also falls back to WiFi.status()
 - 15 PC unit tests
+- stage 2 (cloud): `cloud.cpp` task: device_hello at boot, device_push every 10 s (live + up to 48 log records; upload cursor `uploadedSeq` kept in DS1307 RAM), TLS with 11 pinned root CAs in `cloud_certs.h`, backoff to 5 min, AuthError retries every 10 min, LED CloudDown. Sizes: C3 1.61 MB (82%), DevKit on core 3.3.12 1.96 MB (99.5%; recommend Fox moves dev to an ESP32-C3 DevKit before OTA)
+
+App: `../BleuLand-Energy-App` (Flutter 3.47.6, Riverpod 3, go_router, supabase_flutter, fl_chart, universal_ble + esp_provisioning_ble). Demo mode (simulated Syrian home) + cloud mode. 14 tariff tests. Web build screenshotted in headless Chromium for design review (`flutter build web --no-web-resources-cdn`). Do NOT use flutter_blue_plus (paid licence for companies). APK built by `.github/workflows/app-android.yml`. Chart colours validated with the dataviz validator (series #139C7C on #171B20; brand #1FC8A0 for highlights; amber #FAB219 only for over-tier with icon+label).
 
 Next stages:
 

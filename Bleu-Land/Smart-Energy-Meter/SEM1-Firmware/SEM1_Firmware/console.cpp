@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "app.h"
+#include "cloud.h"
 #include "config.h"
 #include "net.h"
 #include "settings.h"
@@ -33,7 +34,10 @@ void printInfo() {
   Serial.printf("cal       V %.5f  I %.5f  P %.5f  (KV %.3f KI %.4f)\n", s.calV, s.calI, s.calP, KV, KI);
   Serial.printf("log       next #%u  capacity %u\n", (unsigned)app::log().nextSeq(),
                 (unsigned)app::log().capacity());
-  Serial.printf("claimed   %s\n", s.claimCode.length() ? "code stored" : "no");
+  Serial.printf("cloud     %s, %s, uploaded to #%u\n", cloud::stateName(),
+                cloud::claimed() ? "in an account" : "not in an account yet", (unsigned)app::uploadedSeq());
+  if (cloud::state() != CloudState::Ok && cloud::lastError().length())
+    Serial.printf("          last error: %s\n", cloud::lastError().c_str());
 }
 
 void printLog(int n) {
@@ -43,7 +47,7 @@ void printLog(int n) {
   uint32_t next = app::log().nextSeq();
   uint32_t from = next > (uint32_t)n ? next - n : 1;
   uint32_t resume;
-  size_t got = app::log().readFrom(from, recs, n, &resume);
+  size_t got = app::readLog(from, recs, n, &resume);
   for (size_t k = 0; k < got; k++) {
     const auto& r = recs[k];
     Serial.printf("#%u ts %u  %.1f Wh  avg %u W  max %u W  %.1f V  flags %02X\n", (unsigned)r.seq, (unsigned)r.ts,
