@@ -120,3 +120,39 @@ Expected features for this product category:
 - Optional: Home Assistant / MQTT integration, which is a big selling point
 
 Platforms: **Android, iOS and web/desktop**, ideally from **one codebase**.
+
+## Decisions and status (updated by Claude)
+
+Fox chose (Oct 2026):
+
+- **Cloud:** Supabase (org "BLEU LAND"); make a new project for SEM-1 when the cloud stage starts, and ask before any paid plan.
+- **App:** Flutter (Android, iOS, web, desktop from one codebase).
+- **Firmware:** PlatformIO + Arduino core 2.0.17 (`espressif32@6.9.0`), in `../SEM1-Firmware`.
+- **Order:** firmware first, then cloud, then app.
+
+Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
+
+- metering task
+- energy counter backed up in DS1307 RAM
+- 5-min history ring in a raw flash partition (~69 days)
+- NTP + RTC clock (UTC)
+- ESP BLE provisioning (security 1, PoP from the QR) with the `sem1-claim` endpoint for account linking
+- LEDs per the front label: white = ENERGY 1000 imp/kWh, blue = WiFi
+- button 5 s / 15 s reset
+- local API (`/api/live`, `/api/info`, `/api/cal`)
+- serial console
+- 15 PC unit tests
+
+Next stages:
+
+1. Supabase schema + device ingest (device authenticates with its per-unit secret, records keyed by device + timestamp) + upload of the flash log.
+2. Flutter app with BLE onboarding (QR → WiFi → claim code), live view, history, tariff/cost, alerts, sharing.
+3. OTA from the cloud.
+4. MQTT / Home Assistant.
+
+Open hardware items for the C3 PCB:
+
+- user button on GPIO9
+- USB pins
+- I2C pull-ups to 3.3 V
+- per-unit QR on the label
