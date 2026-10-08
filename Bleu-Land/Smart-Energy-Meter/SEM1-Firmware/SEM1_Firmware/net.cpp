@@ -1,7 +1,6 @@
 #include "net.h"
 
 #include <ArduinoJson.h>
-#include <ESPmDNS.h>
 #include <WiFi.h>
 #include <esp_arduino_version.h>
 #include <esp_wifi.h>
@@ -63,7 +62,6 @@ bool wifiLowLevelInit(bool persistent);  // from the Arduino WiFi library
 namespace {
 volatile NetState netState = NetState::Connecting;
 volatile bool gotIp = false;
-bool mdnsStarted = false;
 volatile bool provActive = false;  // phone setup running: it manages the WiFi itself
 uint32_t lastRetryMs = 0;
 uint32_t reconnectAtMs = 0;
@@ -149,7 +147,7 @@ namespace net {
 
 void begin() {
   host = settings::identity().deviceId;
-  host.toLowerCase();  // "sem1-a1b2c3" -> http://sem1-a1b2c3.local
+  host.toLowerCase();  // "sem1-a1b2c3": the name the router shows
   WiFi.onEvent(onEvent);
   WiFi.setHostname(host.c_str());
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -237,15 +235,9 @@ void loop() {
   static bool wasOnline = false;
   bool on = gotIp;
   if (on && !wasOnline) {
-    if (!mdnsStarted && MDNS.begin(host.c_str())) {
-      mdnsStarted = true;
-      MDNS.addService("http", "tcp", 80);
-      MDNS.addService("sem1", "tcp", 80);  // lets the app find meters on the LAN
-      MDNS.addServiceTxt("sem1", "tcp", "id", settings::identity().deviceId.c_str());
-      MDNS.addServiceTxt("sem1", "tcp", "fw", SEM1_FW_VERSION);
-    }
-    Serial.printf("[net] online: http://%s  (http://%s.local)\n", WiFi.localIP().toString().c_str(),
-                  host.c_str());
+    // No mDNS (".local" names): it cost ~40 KB of a full app slot, and Android
+    // browsers don't resolve .local anyway. Use the IP printed here.
+    Serial.printf("[net] online: http://%s\n", WiFi.localIP().toString().c_str());
   }
   wasOnline = on;
 }

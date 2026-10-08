@@ -47,7 +47,7 @@ void handleInfo() {
   d["hw"] = SEM1_HW_NAME;
   d["mac"] = WiFi.macAddress();
   d["ip"] = net::ip();
-  d["host"] = net::hostname() + ".local";
+  d["host"] = net::hostname();  // DHCP name shown in the router
   d["rssi"] = net::rssi();
   d["uptime"] = millis() / 1000;
   d["heap"] = ESP.getFreeHeap();

@@ -20,10 +20,10 @@
 
   Tools menu, prototype (DevKit):
     Board            "ESP32 Dev Module"
-    Partition Scheme "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+    Partition Scheme "No FS 4MB (2MB APP x2)"
   Tools menu, production (ESP32-C3):
     Board            "ESP32C3 Dev Module"
-    Partition Scheme "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+    Partition Scheme "No FS 4MB (2MB APP x2)"
     USB CDC On Boot  "Enabled",  Flash Mode "DIO"
 
   Needs: board package "esp32 by Espressif Systems" 3.x (tested 3.3.12;

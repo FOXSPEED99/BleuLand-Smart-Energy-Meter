@@ -17,7 +17,7 @@ The firmware picks the right pins and CT values from the board you select; you d
   - it's saved every 10 s in the DS1307's battery-backed RAM, which doesn't wear out;
   - and every 5 minutes in the history log.
   - It's calculated from P × dt, the method proven on your bench. The HLW8032's own PF pulse counter is calculated alongside it, so you can compare both against a reference meter. Switch with `energy pf`.
-- **5-minute history in flash ("offline buffer").** About **22 days** of records: time, kWh counter, average power, peak power and voltage. When the cloud part is added, the meter uploads these, so no data is lost while the internet is down. Even during a longer outage the kWh total stays correct; only the oldest 5-minute detail is overwritten.
+- **5-minute history in flash ("offline buffer").** About **11 days** of records: time, kWh counter, average power, peak power and voltage. When the cloud part is added, the meter uploads these, so no data is lost while the internet is down. Even during a longer outage the kWh total stays correct; only the oldest 5-minute detail is overwritten.
 - **Clock.** Gets the time from the internet (NTP) when online and keeps the DS1307 correct. After a power cut with no internet, the DS1307 provides the time. Everything is stored in **UTC**, and the app converts to local time.
 - **WiFi setup from the phone over Bluetooth.** Nothing is hard-coded and there's no always-on access point, so the AP+STA freeze from the test firmware can't happen.
 - **LEDs as printed on the label:**
@@ -61,10 +61,12 @@ Your old test firmware builds on 3.x as well.
    - The `.ino` only has `setup()` and `loop()`; they call `sem1Setup()` / `sem1Loop()` in `main.cpp`, where the real start-up code is.
 2. In the **Tools** menu set:
    - **Board:** "ESP32 Dev Module" (under esp32)
-   - **Partition Scheme:** "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+   - **Partition Scheme:** "No FS 4MB (2MB APP x2)"
    - **Port:** your DevKit's COM port
 
-   Why the Partition Scheme matters: the firmware is about 1.5–1.8 MB, which doesn't fit the default 1.2 MB limit. Our own `partitions.csv` in the sketch folder is what gets flashed (the IDE picks it up automatically), and its app slots are the same size as "Minimal SPIFFS", so the IDE's size check is exact.
+   Why the Partition Scheme matters: the firmware is about 1.5–1.95 MB, which doesn't fit the default 1.2 MB limit. Our own `partitions.csv` in the sketch folder is what gets flashed (the IDE picks it up automatically), and its app slots are the same size as "No FS 4MB (2MB APP x2)", so the IDE's size check is exact.
+   - On the old 2.0.17 board package that option is missing for the DevKit: pick "Huge APP (3MB No OTA/1MB SPIFFS)" instead. The firmware fits either way.
+   - If you see **"Sketch too big" / "text section exceeds available space"**, the Partition Scheme is still on an older choice such as "Minimal SPIFFS". Change it and upload again.
 3. Click **Upload (→)**.
    - The first compile takes a few minutes; after that it's faster.
    - If the upload doesn't start, hold the DevKit's BOOT button while it says "Connecting…".
@@ -103,7 +105,7 @@ Our own app will do this later. Until then, Espressif's free test app speaks the
    2. Open `https://espressif.github.io/esp-jumpstart/qrcode.html?data=` and paste the payload after the `=`.
 3. In the app: **Provision New Device → scan the QR** on your PC screen.
 4. Pick your home WiFi and type its password. The blue LED blinks fast while it connects, then stays on.
-5. The serial monitor prints the meter's address, e.g. `http://192.168.1.57 (http://sem1-a1b2c3.local)`. Open it in a browser on the same WiFi to see live values.
+5. The serial monitor prints the meter's address, e.g. `http://192.168.1.57`. Open it in a browser on the same WiFi to see live values.
 
 The QR payload is fixed for each unit; it's created on the unit's first boot. In production, it's what gets printed on the front label's "SCAN TO PAIR" code.
 
@@ -216,16 +218,16 @@ test/               PC unit tests
 
 ## Size budget
 
-Each app slot is 1.875 MB (the IDE's "Maximum is 1966080 bytes").
+Each app slot holds 2,031,616 bytes (the IDE's "Maximum is 2031616 bytes"). To make room for the HTTPS cloud link, the slots were enlarged by 64 KB each: the crash-report (coredump) area was dropped, and the offline history shrank from 22 to 11 days. Because of that, the core may print one harmless `No core dump partition found` line at boot. The `.local` network name (mDNS, ~37 KB) was also removed; use the IP address the Serial Monitor prints.
 
 | Board package | ESP32-C3 (production) | DevKit (prototype) |
 |---|---|---|
-| 3.3.12 | 1.61 MB (82%) | 1.96 MB (**99.5%**) |
-| 3.3.4 | 1.55 MB (79%) | 1.94 MB (98.6%) |
-| 2.0.17 | 1.70 MB (86%) | 1.82 MB (92%) |
+| 3.3.12 | 1.57 MB (77%) | 1.92 MB (94%) |
+| 3.3.4 | 1.52 MB (74%) | 1.91 MB (93%) |
+| 2.0.17 | 1.66 MB (82%) | 1.79 MB (88%) |
 
 - **The production C3 has room** for the next features: over-the-air updates, MQTT.
-- **The classic-ESP32 DevKit is nearly full on core 3.x.** Its Bluetooth stack is about 0.8 MB, and the HTTPS cloud link added about 130 KB.
+- **The classic-ESP32 DevKit is close to full on core 3.x.** Its Bluetooth stack is about 0.8 MB, and the HTTPS cloud link added about 130 KB.
 - For further development, use an **ESP32-C3 DevKit**. It's cheap, and it's the chip the product ships with.
 - Most of this is the Bluetooth stack used for WiFi setup.
 - The cloud features of stage 2 should still fit on the C3. The DevKit is only for development.
