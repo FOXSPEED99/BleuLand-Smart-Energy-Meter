@@ -63,7 +63,9 @@ class _AddMeterScreenState extends ConsumerState<AddMeterScreen> {
       status = 'Looking for ${c.bleName}…';
     });
     try {
-      if (!kIsWeb) await UniversalBle.requestPermissions(withAndroidFineLocation: true);
+      // Bluetooth only: the manifest marks scanning "neverForLocation", so
+      // Android 12+ needs no location permission (asking for it fails).
+      if (!kIsWeb) await UniversalBle.requestPermissions();
       final id = await findMeter(c.bleName);
       if (id == null) {
         _fail(
