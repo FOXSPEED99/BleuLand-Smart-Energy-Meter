@@ -127,7 +127,7 @@ Fox chose (Oct 2026):
 
 - **Cloud:** Supabase (org "BLEU LAND"); make a new project for SEM-1 when the cloud stage starts, and ask before any paid plan.
 - **App:** Flutter (Android, iOS, web, desktop from one codebase).
-- **Firmware:** PlatformIO + Arduino core 2.0.17 (`espressif32@6.9.0`), in `../SEM1-Firmware`.
+- **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **2.0.17**, + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino`, all code in its `src/` folder; board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically (choose Partition Scheme "Minimal SPIFFS" only to raise the IDE size limit). PC tests: `sh test/run_tests.sh`.
 - **Order:** firmware first, then cloud, then app.
 
 Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):

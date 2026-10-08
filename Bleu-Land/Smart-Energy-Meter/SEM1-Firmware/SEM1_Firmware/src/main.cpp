@@ -8,6 +8,8 @@
 //    API and the serial console.
 #include <Arduino.h>
 #include <Wire.h>
+#include <esp_arduino_version.h>
+#include <esp_ota_ops.h>
 #include <esp_sntp.h>
 #include <esp_task_wdt.h>
 #include <sys/time.h>
@@ -23,6 +25,10 @@
 #include "meter.h"
 #include "net.h"
 #include "settings.h"
+
+#if ESP_ARDUINO_VERSION_MAJOR != 2
+#error "SEM-1 needs board package 'esp32 by Espressif Systems' version 2.0.17 (Tools > Board > Boards Manager)"
+#endif
 
 using namespace sem1;
 
@@ -322,6 +328,11 @@ void setup() {
   Serial.begin(115200);
   delay(50);
   Serial.printf("\nSEM-1 firmware %s (%s)\n", SEM1_FW_VERSION, SEM1_HW_NAME);
+
+  // The IDE's size check (1.9 MB) is looser than our app slot (1.75 MB).
+  const esp_partition_t* slot = esp_ota_get_running_partition();
+  if (slot && ESP.getSketchSize() > slot->size)
+    Serial.println("!!! FIRMWARE TOO BIG FOR ITS FLASH SLOT: OTA updates will break !!!");
 
   mtx = xSemaphoreCreateMutex();
   settings::begin();

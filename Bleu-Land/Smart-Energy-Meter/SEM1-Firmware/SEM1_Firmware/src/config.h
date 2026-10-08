@@ -2,6 +2,8 @@
 #pragma once
 #include <stdint.h>
 
+#include "board.h"
+
 #ifndef SEM1_FW_VERSION
 #define SEM1_FW_VERSION "0.1.0"
 #endif
@@ -10,15 +12,9 @@
 // KI = 0.001 / (R_burden / CT_turns); the HLW8032 coefficient is 1.0 for a 1 mOhm shunt.
 //   Production: SCT-013-000 (100 A : 50 mA, 2000 turns), R14 = 0.5 R  -> KI = 4.0
 //   Prototype : SCT-013-030 (30 A / 1 V, 1800 turns, ~62 R inside), R14 = 0.44 R -> KI ~= 4.12
-#ifndef SEM1_CT_TURNS
-#define SEM1_CT_TURNS 2000.0f
-#endif
-#ifndef SEM1_CT_INT_BURDEN
-#define SEM1_CT_INT_BURDEN 0.0f  // ohms built into the CT (0 = current-output CT)
-#endif
-#ifndef SEM1_R14_OHMS
-#define SEM1_R14_OHMS 0.5f
-#endif
+// The values for each board are in board.h:
+//   SEM1_CT_TURNS, SEM1_CT_INT_BURDEN (ohms inside the CT, 0 = current-output CT),
+//   SEM1_R14_OHMS
 
 // Voltage: 4 x 47k = 188k into ZMPT101B (2 mA:2 mA), 100 R burden -> same
 // ratio as the datasheet's 1.88 M / 1 k divider.

@@ -3,10 +3,12 @@
 This is the "real" firmware for the SEM-1, replacing `SEM1-App/reference/SEM1_Test.ino`.
 It builds for two boards:
 
-| Target | Board | CT |
+| Arduino IDE board (Tools > Board) | Hardware | CT |
 |---|---|---|
-| `devkit` | Your prototype: ESP32-DevKitC on the current PCB | SCT-013-030 (30 A / 1 V), R14 = 0.44 Ω |
-| `c3` | Production: ESP32-C3-WROOM-02 (PCB not made yet) | SCT-013-000 (100 A : 50 mA), R14 = 0.5 Ω |
+| **ESP32 Dev Module** | Your prototype: ESP32-DevKitC on the current PCB | SCT-013-030 (30 A / 1 V), R14 = 0.44 Ω |
+| **ESP32C3 Dev Module** | Production: ESP32-C3-WROOM-02 (PCB not made yet) | SCT-013-000 (100 A : 50 mA), R14 = 0.5 Ω |
+
+The firmware picks the right pins and CT values from the board you select; you don't edit anything.
 
 ## What it does (stage 1)
 
@@ -34,26 +36,33 @@ Coming in the next stages:
 - OTA updates from the cloud
 - MQTT / Home Assistant
 
-## Why PlatformIO (and not ESP-IDF or the Arduino IDE)
+## Arduino IDE setup (one time)
 
-- **You keep writing Arduino-style code.** PlatformIO uses the same Arduino core for ESP32 as your Arduino IDE (version 2.0.17 here), so `Serial`, `WiFi`, `Preferences` and `Wire` all work the same.
-- **Every build is identical.** `platformio.ini` locks the exact core and library versions. In the Arduino IDE, anyone's installed versions can differ, which is bad for a product.
-- **It handles a real project.** The code is split into many files, and one project builds both boards (DevKit and C3). It also includes a custom flash layout and unit tests that run on your PC.
-- **ESP-IDF** (Espressif's own toolkit) gives more control, but it's much harder to learn and none of your Arduino knowledge carries over. We can move to it later if we ever need to; the metering core in `lib/sem1core` is plain C++ and would come along unchanged.
+You already have the Arduino IDE. Two things to add:
 
-## Install (Windows, one time)
+1. **ESP32 board package, version 2.0.17.**
+   1. **Tools → Board → Boards Manager…**, search **esp32**.
+   2. In the entry **"esp32 by Espressif Systems"**, open the version drop-down, pick **2.0.17** and click **Install**. If a 3.x version is installed, this replaces it.
+   3. Why exactly 2.0.17: version 3.x changed the Bluetooth WiFi-setup code. If the wrong version is installed, the sketch stops with an error telling you to install 2.0.17.
+2. **ArduinoJson library.** **Sketch → Include Library → Manage Libraries…**, search **ArduinoJson** (by Benoit Blanchon), install the newest **7.x**.
 
-1. Install **VS Code**: https://code.visualstudio.com → Download for Windows → run the installer with the default options.
-2. Open VS Code → click the **Extensions** icon on the left (four squares) → search **PlatformIO IDE** → **Install**. Wait until it says it's finished (a few minutes), then restart VS Code.
-3. If Windows doesn't see the DevKit's USB port, install the driver for its USB chip. Most DevKitC boards use the **CP210x** chip (Silicon Labs website); some use the **CH340**. The Arduino IDE probably already installed it for you.
+Your old test firmware also builds fine on 2.0.17.
 
 ## Build and flash the prototype
 
-1. In VS Code: **File → Open Folder…** → pick the `SEM1-Firmware` folder.
-2. Wait for PlatformIO to finish loading the project. The first time, it downloads the ESP32 tools (about 500 MB).
-3. In the blue bar at the bottom, click the environment name and choose **`env:devkit`**.
-4. Plug in the DevKit and click the **→ (Upload)** arrow in the bottom bar.
-5. Click the **plug icon (Serial Monitor)**. You'll see something like:
+1. **File → Open…** → open `SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino`.
+   - You'll only see one tab with instructions. The real code is in the `src` folder next to it, and the IDE compiles it automatically.
+   - To read or edit the code, open those files in any text editor; Notepad++ or VS Code are nicer than Notepad.
+2. In the **Tools** menu set:
+   - **Board:** "ESP32 Dev Module" (under esp32)
+   - **Partition Scheme:** "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+   - **Port:** your DevKit's COM port
+
+   Why the Partition Scheme matters: it only raises the IDE's size limit. The firmware is about 1.6 MB, which doesn't fit the IDE's default 1.2 MB limit. The flash layout actually used is our own `partitions.csv` in the sketch folder, which the IDE picks up automatically.
+3. Click **Upload (→)**.
+   - The first compile takes a few minutes; after that it's faster.
+   - If the upload doesn't start, hold the DevKit's BOOT button while it says "Connecting…".
+4. Open **Tools → Serial Monitor**, set **115200 baud**, and press the DevKit's EN (reset) button. You'll see something like:
 
    ```
    SEM-1 firmware 0.1.0 (SEM1-proto-devkit)
@@ -64,6 +73,14 @@ Coming in the next stages:
    [net] setup mode: BLE name SEM1_A1B2C3
    [net] QR payload: {"ver":"v1","name":"SEM1_A1B2C3","pop":"k7m3x9qa","transport":"ble"}
    ```
+
+5. For commands, set the Serial Monitor's line-ending drop-down to **"Newline"**, type `help` and press Enter.
+
+For the **ESP32-C3** later:
+- Board **"ESP32C3 Dev Module"**
+- the same Partition Scheme
+- **USB CDC On Boot: "Enabled"** (otherwise the Serial Monitor stays empty)
+- **Flash Mode: "DIO"**
 
 > **Calibration carries over.** The settings area sits at the same flash
 > address, under the same name (`sem1`, `calV/calI/calP`) as the test
@@ -133,32 +150,31 @@ GET  /api/info   firmware, WiFi, clock, RTC, HLW8032 packet counters, calibratio
 POST /api/cal    key=<pop> and one of v= | i= | p= | reset=1 | energy=int|pf
 ```
 
-## Unit tests (on your PC, no board needed)
+## Unit tests (optional, on a PC, no board needed)
 
-To run the tests you also need a C++ compiler on Windows: install **MSYS2** and its `mingw-w64-ucrt-x86_64-gcc` package, then add its `bin` folder to `PATH`. Then, in VS Code: **PlatformIO icon → Project Tasks → native → Advanced → Test**. Or in the PlatformIO terminal:
-
-```
-pio test -e native
-```
-
-These tests check the HLW8032 decoder, the energy maths and the flash log, including power cuts in the middle of a write. All 15 pass.
+The decoder, energy maths and flash log (including power cuts in the middle of a write) are covered by 15 tests. I run them after every change; you don't need to. If you want to:
+1. Install a C++ compiler. On Windows: **MSYS2** with the package `mingw-w64-ucrt-x86_64-gcc`, or WSL.
+2. Run `sh test/run_tests.sh`.
 
 ## Files
 
 ```
-platformio.ini            build settings for devkit / c3 / native tests
-partitions_sem1.csv       flash layout: 2 x 1.75 MB app slots (for safe OTA) + 392 KB history log
-lib/sem1core/             plain C++, no Arduino: HLW8032 decoder, meter maths, flash log
-src/board.h               pin maps for both boards
-src/config.h              CT / burden values, timings
-src/main.cpp              start-up, metering task, clock, history log, button
-src/net.cpp               BLE WiFi setup + reconnect
-src/local_api.cpp         web page + JSON API
-src/rtc_ds1307.cpp        clock + energy backup in RTC RAM
-src/settings.cpp          calibration, identity (device ID, QR code, cloud secret)
-src/console.cpp           serial commands
-src/leds.cpp              LED patterns
-test/test_core/           unit tests
+SEM1_Firmware/SEM1_Firmware.ino   open this in the Arduino IDE (instructions only)
+SEM1_Firmware/partitions.csv      flash layout: 2 x 1.75 MB app slots (for safe OTA) + 392 KB history log
+SEM1_Firmware/src/
+  main.cpp          setup()/loop(): start-up, metering task, clock, history log, button
+  board.h           pin maps + CT values for both boards
+  config.h          timings and front-end coefficients
+  hlw8032.cpp       HLW8032 packet decoder          (plain C++, unit tested)
+  meter.cpp         1 s averages + energy counter   (plain C++, unit tested)
+  datalog.cpp       history ring buffer in flash    (plain C++, unit tested)
+  net.cpp           BLE WiFi setup + reconnect
+  local_api.cpp     web page + JSON API
+  rtc_ds1307.cpp    clock + energy backup in RTC RAM
+  settings.cpp      calibration, identity (device ID, QR code, cloud secret)
+  console.cpp       serial commands
+  leds.cpp          LED patterns
+test/               PC unit tests
 ```
 
 ## For the production PCB (ESP32-C3), hardware requests
@@ -183,7 +199,8 @@ test/test_core/           unit tests
 
 ## Size budget
 
-- C3: 1.53 MB of 1.75 MB (83%).
+- C3: 1.53 MB of its 1.75 MB slot (83%).
 - DevKit: 1.64 MB (89%).
+- The IDE shows a percentage of 1.9 MB; ignore that, the real limit is 1.75 MB. If the firmware ever grows past it, the meter prints a loud warning at start-up.
 - Most of this is the Bluetooth stack used for WiFi setup.
 - The cloud features of stage 2 should still fit on the C3. The DevKit is only for development.

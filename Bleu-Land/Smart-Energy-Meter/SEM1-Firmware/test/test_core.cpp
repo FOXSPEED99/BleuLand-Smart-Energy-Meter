@@ -1,4 +1,4 @@
-// PC unit tests for the metering core. Run with:  pio test -e native
+// PC unit tests for the metering core. Run with:  sh test/run_tests.sh
 #include <string.h>
 #include <unity.h>
 
