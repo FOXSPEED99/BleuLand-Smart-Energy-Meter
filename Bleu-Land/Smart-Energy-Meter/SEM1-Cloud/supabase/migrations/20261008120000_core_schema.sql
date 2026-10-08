@@ -25,11 +25,12 @@ create table public.devices (
   claimed_at       timestamptz,
   last_seen        timestamptz,
   -- user settings (owner can change)
-  timezone         text not null default 'Asia/Riyadh',
-  currency         text not null default 'SAR' check (char_length(currency) = 3),
-  -- tiered tariff: price per kWh for each block of monthly consumption;
-  -- the last tier has no upto_kwh. Default: Saudi residential (SEC).
-  tariff           jsonb not null default '{"tiers":[{"upto_kwh":6000,"price":0.18},{"price":0.30}],"monthly_fixed":0}',
+  timezone         text not null default 'Asia/Damascus',
+  currency         text not null default 'SYP' check (char_length(currency) = 3),
+  -- tiered tariff: price per kWh for each block of consumption in one billing
+  -- period (period_months long, e.g. 2 for bi-monthly bills); the last tier has
+  -- no upto_kwh. Empty tiers = not set yet: the app asks the owner to fill it in.
+  tariff           jsonb not null default '{"tiers":[],"fixed_per_period":0,"period_months":1}',
   billing_day      smallint not null default 1 check (billing_day between 1 and 28),
   alert_power_w    integer check (alert_power_w is null or alert_power_w between 100 and 30000),
   alert_offline_min integer not null default 15 check (alert_offline_min between 5 and 1440),
