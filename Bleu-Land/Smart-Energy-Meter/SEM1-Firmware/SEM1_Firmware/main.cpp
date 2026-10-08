@@ -15,6 +15,7 @@
 #include <sys/time.h>
 
 #include "app.h"
+#include "sem1.h"
 #include "board.h"
 #include "config.h"
 #include "console.h"
@@ -321,8 +322,8 @@ String setEnergySource(EnergySource src) {
 
 }  // namespace app
 
-// ---------------- setup / loop ----------------
-void setup() {
+// ---------------- start-up and main loop (called from SEM1_Firmware.ino) ----------------
+void sem1Setup() {
   leds::begin();
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   Serial.begin(115200);
@@ -368,7 +369,7 @@ void setup() {
   enableLoopWDT();
 }
 
-void loop() {
+void sem1Loop() {
   net::loop();
   clockLoop();
   logLoop();

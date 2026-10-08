@@ -51,8 +51,9 @@ Your old test firmware also builds fine on 2.0.17.
 ## Build and flash the prototype
 
 1. **File → Open…** → open `SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino`.
-   - You'll only see one tab with instructions. The real code is in the `src` folder next to it, and the IDE compiles it automatically.
-   - To read or edit the code, open those files in any text editor; Notepad++ or VS Code are nicer than Notepad.
+   - The other files open as **tabs** along the top (`main.cpp`, `hlw8032.cpp`, …).
+   - When you press Upload, the IDE compiles **all** the tabs together.
+   - The `.ino` only has `setup()` and `loop()`; they call `sem1Setup()` / `sem1Loop()` in `main.cpp`, where the real start-up code is.
 2. In the **Tools** menu set:
    - **Board:** "ESP32 Dev Module" (under esp32)
    - **Partition Scheme:** "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
@@ -159,21 +160,21 @@ The decoder, energy maths and flash log (including power cuts in the middle of a
 ## Files
 
 ```
-SEM1_Firmware/SEM1_Firmware.ino   open this in the Arduino IDE (instructions only)
-SEM1_Firmware/partitions.csv      flash layout: 2 x 1.75 MB app slots (for safe OTA) + 392 KB history log
-SEM1_Firmware/src/
-  main.cpp          setup()/loop(): start-up, metering task, clock, history log, button
-  board.h           pin maps + CT values for both boards
-  config.h          timings and front-end coefficients
-  hlw8032.cpp       HLW8032 packet decoder          (plain C++, unit tested)
-  meter.cpp         1 s averages + energy counter   (plain C++, unit tested)
-  datalog.cpp       history ring buffer in flash    (plain C++, unit tested)
-  net.cpp           BLE WiFi setup + reconnect
-  local_api.cpp     web page + JSON API
-  rtc_ds1307.cpp    clock + energy backup in RTC RAM
-  settings.cpp      calibration, identity (device ID, QR code, cloud secret)
-  console.cpp       serial commands
-  leds.cpp          LED patterns
+SEM1_Firmware/                    the Arduino sketch: every file below opens as a tab
+  SEM1_Firmware.ino   setup() / loop(): open this one
+  partitions.csv      flash layout: 2 x 1.75 MB app slots (for safe OTA) + 392 KB history log
+  main.cpp            sem1Setup()/sem1Loop(): start-up, metering task, clock, history log, button
+  board.h             pin maps + CT values for both boards
+  config.h            timings and front-end coefficients
+  hlw8032.cpp         HLW8032 packet decoder          (plain C++, unit tested)
+  meter.cpp           1 s averages + energy counter   (plain C++, unit tested)
+  datalog.cpp         history ring buffer in flash    (plain C++, unit tested)
+  net.cpp             BLE WiFi setup + reconnect
+  local_api.cpp       web page + JSON API
+  rtc_ds1307.cpp      clock + energy backup in RTC RAM
+  settings.cpp        calibration, identity (device ID, QR code, cloud secret)
+  console.cpp         serial commands
+  leds.cpp            LED patterns
 test/               PC unit tests
 ```
 
@@ -183,7 +184,7 @@ test/               PC unit tests
    - GPIO9 is also the C3's "boot" pin, so the same button lets you re-flash a unit.
    - Without a button, a customer who changes their WiFi router can't re-pair the meter.
 2. **Bring out USB (GPIO18 = D−, GPIO19 = D+)** to a connector or test pads. The C3 has USB built in, so there's no CP2102/CH340 chip to buy, and it's how the factory flashes units.
-3. Proposed pins (in `src/board.h`, easy to change):
+3. Proposed pins (in `board.h`, easy to change):
 
    | Signal | GPIO |
    |---|---|
