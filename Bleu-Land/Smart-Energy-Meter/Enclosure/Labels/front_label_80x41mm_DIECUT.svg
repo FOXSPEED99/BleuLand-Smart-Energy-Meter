@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="41mm" viewBox="0 0 80 41">
+<rect x="0" y="0" width="80" height="41" rx="1.5" fill="none" stroke="#FF00FF" stroke-width="0.1"/>
+<circle cx="8.60" cy="25.00" r="1.6" fill="none" stroke="#FF00FF" stroke-width="0.1"/>
+<circle cx="8.70" cy="16.00" r="1.6" fill="none" stroke="#FF00FF" stroke-width="0.1"/>
+<text x="2" y="20" font-family="Poppins" font-size="1.6" fill="#FF00FF">DIE-CUT: outline R1.5, LED holes Ø3.2 (rods Ø3.0)</text>
+</svg>
