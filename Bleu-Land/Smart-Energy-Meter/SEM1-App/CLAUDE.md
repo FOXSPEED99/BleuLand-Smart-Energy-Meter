@@ -148,6 +148,8 @@ Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
 - 15 PC unit tests
 - stage 2 (cloud): `cloud.cpp` task: device_hello at boot, device_push every 10 s (live + up to 48 log records; upload cursor `uploadedSeq` kept in DS1307 RAM), TLS with 11 pinned root CAs in `cloud_certs.h`, backoff to 5 min, AuthError retries every 10 min, LED CloudDown. Sizes: C3 1.61 MB (82%), DevKit on core 3.3.12 1.96 MB (99.5%; recommend Fox moves dev to an ESP32-C3 DevKit before OTA)
 
+App: `../BleuLand-Energy-App` (Flutter 3.47.6, Riverpod 3, go_router, supabase_flutter, fl_chart, universal_ble + esp_provisioning_ble). Demo mode (simulated Syrian home) + cloud mode. 14 tariff tests. Web build screenshotted in headless Chromium for design review (`flutter build web --no-web-resources-cdn`). Do NOT use flutter_blue_plus (paid licence for companies). APK built by `.github/workflows/app-android.yml`. Chart colours validated with the dataviz validator (series #139C7C on #171B20; brand #1FC8A0 for highlights; amber #FAB219 only for over-tier with icon+label).
+
 Next stages:
 
 1. Supabase schema + device ingest (device authenticates with its per-unit secret, records keyed by device + timestamp) + upload of the flash log.
