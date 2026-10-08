@@ -102,6 +102,16 @@ Our own app will do this later. Until then, Espressif's free test app speaks the
 
 The QR payload is fixed for each unit; it's created on the unit's first boot. In production, it's what gets printed on the front label's "SCAN TO PAIR" code.
 
+**Without a QR code:**
+1. In the app tap **I don't have a QR code**, then **CHANGE** next to "Prefix" and type `SEM1_`. The app only lists names starting with `PROV_` by default.
+2. Pick your meter, then type the 8-letter `pop` code when asked.
+
+**The app finds nothing?**
+- Check that the blue LED blinks **slowly** and the serial monitor shows `[net] setup mode: BLE name SEM1_...`.
+- If it says `connecting to saved WiFi` instead, the meter already has a network saved: type `wifi-reset` (or hold BOOT 5 s) to start setup again.
+- WiFi details left behind by other firmware, such as the test sketch, are ignored automatically.
+- On Android, Bluetooth **and** Location must be on to scan.
+
 ## LEDs
 
 | WiFi LED (blue) | Meaning |

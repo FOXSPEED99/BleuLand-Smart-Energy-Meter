@@ -80,6 +80,19 @@ void saveClaimCode(const String& code) {
   prefs.end();
 }
 
+bool wifiFromSetup() {
+  prefs.begin(NS, true);
+  bool v = prefs.getBool("wifiok", false);
+  prefs.end();
+  return v;
+}
+
+void setWifiFromSetup(bool v) {
+  prefs.begin(NS, false);
+  prefs.putBool("wifiok", v);
+  prefs.end();
+}
+
 uint64_t loadEnergyMilliWh() {
   prefs.begin(NS, true);
   uint64_t v = prefs.getULong64("emwh", 0);

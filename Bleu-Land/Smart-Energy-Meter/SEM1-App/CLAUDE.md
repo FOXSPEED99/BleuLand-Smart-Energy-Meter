@@ -141,6 +141,7 @@ Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
 - button 5 s / 15 s reset
 - local API (`/api/live`, `/api/info`, `/api/cal`)
 - serial console
+- WiFi saved by other firmware is ignored: NVS flag `wifiok` is set only on PROV_CRED_SUCCESS; without it the stored STA config is erased and BLE setup starts (Fox's DevKit had the test sketch's network saved and never entered setup)
 - 15 PC unit tests
 
 Next stages:
