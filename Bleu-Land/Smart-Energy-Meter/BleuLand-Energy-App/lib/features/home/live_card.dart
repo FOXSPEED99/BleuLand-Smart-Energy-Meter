@@ -12,11 +12,19 @@ import '../../widgets/ui.dart';
 
 /// The hero: what the house is using right now.
 class LiveCard extends StatefulWidget {
-  const LiveCard({super.key, required this.reading, required this.meter, this.loading = false, this.todayKwh});
+  const LiveCard({
+    super.key,
+    required this.reading,
+    required this.meter,
+    this.loading = false,
+    this.todayKwh,
+    this.onFixWifi,
+  });
   final LiveReading? reading;
   final Meter meter;
   final bool loading;
   final double? todayKwh; // for "compared with your average today"
+  final VoidCallback? onFixWifi; // offline: open the WiFi screen
 
   @override
   State<LiveCard> createState() => _LiveCardState();
@@ -78,7 +86,7 @@ class _LiveCardState extends State<LiveCard> {
                   if (widget.loading)
                     Text('Connecting to your meter…', style: t.bodySmall?.copyWith(color: C.text2))
                   else if (offline)
-                    _OfflineNote(reading: r)
+                    _OfflineNote(reading: r, onFixWifi: widget.onFixWifi)
                   else
                     _UsageNote(watts: watts, todayKwh: widget.todayKwh),
                 ]),
@@ -180,8 +188,9 @@ class _UsageNote extends StatelessWidget {
 
 /// Offline: the usage is unknown, not zero. Show the last value we had.
 class _OfflineNote extends StatelessWidget {
-  const _OfflineNote({required this.reading});
+  const _OfflineNote({required this.reading, this.onFixWifi});
   final LiveReading? reading;
+  final VoidCallback? onFixWifi;
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +206,19 @@ class _OfflineNote extends StatelessWidget {
                 'The meter may have lost power or internet; it keeps recording and catches up when it\'s back.',
         style: t.bodySmall?.copyWith(color: C.text2),
       ),
+      if (onFixWifi != null && r != null) ...[
+        const SizedBox(height: S.sm),
+        OutlinedButton.icon(
+          onPressed: onFixWifi,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: S.md),
+            visualDensity: VisualDensity.compact,
+          ),
+          icon: const Icon(Icons.wifi_find_rounded, size: 18),
+          label: const Text('Changed your WiFi?'),
+        ),
+      ],
     ]);
   }
 }

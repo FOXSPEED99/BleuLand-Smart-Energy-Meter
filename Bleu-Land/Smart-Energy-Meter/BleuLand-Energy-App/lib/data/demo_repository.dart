@@ -106,6 +106,7 @@ class DemoRepository implements EnergyRepository {
         pf: pf,
         kwhTotal: total,
         rssi: -55 - rnd.nextInt(10),
+        ssid: 'Home-WiFi',
         day: DateTime(now.year, now.month, now.day),
         dayVmin: vMin,
         dayVminAt: vMinAt,
@@ -189,6 +190,12 @@ class DemoRepository implements EnergyRepository {
 
   @override
   Future<ClaimResult> claim(String meterId, String pop, String name) async => ClaimResult.ok;
+
+  @override
+  Future<bool> requestWifiSetup(String meterId) async => true;
+
+  @override
+  Future<String?> setupCode(String meterId) async => null;
 
   // Firmware: a pretend update that runs through every stage in ~25 s.
   String get _fw => _meter.fw ?? '0.2.0';

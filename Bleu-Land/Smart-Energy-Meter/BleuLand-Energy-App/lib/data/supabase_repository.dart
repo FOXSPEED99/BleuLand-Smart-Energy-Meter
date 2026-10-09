@@ -58,6 +58,7 @@ class SupabaseRepository implements EnergyRepository {
         pf: _d(r['pf']),
         kwhTotal: _d(r['kwh']),
         rssi: (r['rssi'] as num?)?.toInt(),
+        ssid: r['ssid'] as String?,
         day: r['day'] == null ? null : DateTime.parse(r['day'] as String),
         dayVmin: _dn(r['day_vmin']),
         dayVminAt: _ts(r['day_vmin_at']),
@@ -183,6 +184,22 @@ class SupabaseRepository implements EnergyRepository {
       };
     } catch (_) {
       return ClaimResult.failed;
+    }
+  }
+
+  @override
+  Future<bool> requestWifiSetup(String meterId) async {
+    final r = Map<String, dynamic>.from(await _db.rpc('request_wifi_setup', params: {'p_id': meterId}) as Map);
+    if (r['ok'] != true) throw StateError(r['error']?.toString() ?? 'failed');
+    return r['online'] == true;
+  }
+
+  @override
+  Future<String?> setupCode(String meterId) async {
+    try {
+      return await _db.rpc('get_setup_code', params: {'p_id': meterId}) as String?;
+    } catch (_) {
+      return null;
     }
   }
 

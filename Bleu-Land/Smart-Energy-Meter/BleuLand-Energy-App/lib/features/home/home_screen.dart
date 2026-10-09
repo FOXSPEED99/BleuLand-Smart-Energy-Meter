@@ -139,6 +139,7 @@ class _DashboardState extends ConsumerState<_Dashboard> with WidgetsBindingObser
             meter: meter,
             loading: live.isLoading && !live.hasValue,
             todayKwh: cycle.value?.todayKwh,
+            onFixWifi: meter.isOwner ? () => context.push('/settings/wifi') : null,
           ),
           const SizedBox(height: S.md),
           VoltageCard(reading: live.value, meter: meter, onEditRange: meter.isOwner ? _editRange : null),

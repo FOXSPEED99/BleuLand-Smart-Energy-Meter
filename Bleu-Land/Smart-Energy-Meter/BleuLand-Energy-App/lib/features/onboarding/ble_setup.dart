@@ -129,3 +129,62 @@ Future<String?> findMeter(String bleName, {Duration timeout = const Duration(sec
   } catch (_) {}
   return id;
 }
+
+enum LinkError { notFound, connectFailed, wrongCode, lost }
+
+enum JoinResult { connected, wrongPassword, notFound, timeout, lost }
+
+/// An encrypted Bluetooth session with a meter in setup mode: find it, list
+/// the WiFi networks it can see, send one, wait for the result.
+class MeterLink {
+  MeterLink._(this._transport, this._prov);
+  final UniversalBleTransport _transport;
+  final EspProv _prov;
+
+  static Future<(MeterLink?, LinkError?)> open(MeterCode c, {Duration findFor = const Duration(seconds: 15)}) async {
+    final id = await findMeter(c.bleName, timeout: findFor);
+    if (id == null) return (null, LinkError.notFound);
+    final t = UniversalBleTransport(id);
+    if (!await t.connect()) return (null, LinkError.connectFailed);
+    final prov = EspProv(transport: t, security: Security1(pop: c.pop));
+    final s = await prov.establishSession();
+    if (s == EstablishSessionStatus.keymismatch) {
+      await t.disconnect();
+      return (null, LinkError.wrongCode);
+    }
+    if (s != EstablishSessionStatus.connected) {
+      await t.disconnect();
+      return (null, LinkError.lost);
+    }
+    return (MeterLink._(t, prov), null);
+  }
+
+  /// Networks the meter can see, strongest first, one entry per name.
+  Future<List<WifiAP>> networks() async {
+    final list = await _prov.startScanWiFi();
+    list.sort((a, b) => b.rssi.compareTo(a.rssi));
+    final seen = <String>{};
+    return [for (final n in list) if (n.ssid.isNotEmpty && seen.add(n.ssid)) n];
+  }
+
+  Future<JoinResult> join(String ssid, String password) async {
+    try {
+      await _prov.sendWifiConfig(ssid: ssid, password: password);
+      await _prov.applyWifiConfig();
+      final deadline = DateTime.now().add(const Duration(seconds: 45));
+      while (DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final st = await _prov.getStatus();
+        if (st.state == WifiConnectionState.Connected) return JoinResult.connected;
+        if (st.state == WifiConnectionState.ConnectionFailed) {
+          return st.failedReason == WifiConnectFailedReason.AuthError ? JoinResult.wrongPassword : JoinResult.notFound;
+        }
+      }
+      return JoinResult.timeout;
+    } catch (_) {
+      return JoinResult.lost;
+    }
+  }
+
+  Future<void> close() => _transport.disconnect();
+}

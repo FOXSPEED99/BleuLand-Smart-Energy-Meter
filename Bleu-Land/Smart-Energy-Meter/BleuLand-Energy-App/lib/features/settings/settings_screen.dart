@@ -47,6 +47,7 @@ class SettingsScreen extends ConsumerWidget {
                 value: meter.isOwner ? 'Invite by e-mail' : 'Shared with you',
                 onTap: meter.isOwner ? () => context.push('/settings/sharing') : null,
               ),
+              _WifiRow(meter: meter),
               _FirmwareRow(meter: meter),
             ]),
           ],
@@ -157,6 +158,31 @@ class _MeterHeader extends ConsumerWidget {
   }
 
   static String _signal(int rssi) => rssi > -60 ? 'excellent' : rssi > -70 ? 'good' : rssi > -80 ? 'fair' : 'weak';
+}
+
+/// "Ibrahim · signal good", or "Offline · fix it".
+class _WifiRow extends ConsumerWidget {
+  const _WifiRow({required this.meter});
+  final Meter meter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    final live = ref.watch(liveProvider(meter.id)).value;
+    final online = live != null && DateTime.now().difference(live.ts) < AppConfig.offlineAfter;
+    final value = online
+        ? (live.ssid ?? 'Connected')
+        : live == null
+            ? 'Not reporting yet'
+            : 'Offline since ${fmtAgo(live.ts)}';
+    return ListTile(
+      onTap: () => context.push('/settings/wifi'),
+      leading: Icon(online ? Icons.wifi_rounded : Icons.wifi_off_rounded, color: online ? C.text2 : C.criticalText),
+      title: Text('WiFi', style: t.bodyLarge),
+      subtitle: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: const Icon(Icons.chevron_right_rounded, color: C.text3),
+    );
+  }
 }
 
 /// "Firmware 0.3.0 · up to date", or a highlighted "update available".

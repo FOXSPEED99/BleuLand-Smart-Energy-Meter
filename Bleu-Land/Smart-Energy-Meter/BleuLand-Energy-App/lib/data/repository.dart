@@ -21,6 +21,14 @@ abstract class EnergyRepository {
 
   Future<ClaimResult> claim(String meterId, String pop, String name);
 
+  /// Changing the meter's WiFi (owner). Asks an online meter to open
+  /// Bluetooth setup; returns whether the meter was online.
+  Future<bool> requestWifiSetup(String meterId);
+
+  /// The 8-character code from the label (owner only, if known), needed for
+  /// Bluetooth setup.
+  Future<String?> setupCode(String meterId);
+
   /// Firmware updates over WiFi (owner taps "Update").
   Future<FirmwareStatus> firmware(String meterId);
   Future<UpdateRequest> requestUpdate(String meterId);

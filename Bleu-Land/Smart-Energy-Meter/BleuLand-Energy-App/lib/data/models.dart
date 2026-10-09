@@ -87,6 +87,7 @@ class LiveReading {
     required this.pf,
     required this.kwhTotal,
     this.rssi,
+    this.ssid,
     this.day,
     this.dayVmin,
     this.dayVminAt,
@@ -98,6 +99,7 @@ class LiveReading {
   final double watts, volts, amps, pf;
   final double kwhTotal; // meter's lifetime counter
   final int? rssi;
+  final String? ssid; // WiFi the meter is on
 
   /// Lowest/highest mains voltage on [day] (the meter's local date).
   final DateTime? day;
