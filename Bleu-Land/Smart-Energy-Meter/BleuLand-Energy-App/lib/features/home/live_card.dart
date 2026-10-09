@@ -247,10 +247,9 @@ class _UsageNote extends StatelessWidget {
   }
 }
 
-/// The meter isn't reporting. Same shape as the live card, so it reads as the
-/// same card in another state: the coral pill in the corner, when it was last
-/// heard, one short reason, and an empty gauge with a pulse that shows the app
-/// is still listening for it.
+/// The meter isn't reporting: "last seen" and the Offline pill on one line,
+/// one short headline with one short reason under it, and a softly breathing
+/// icon with ripples that shows the app is still listening for the meter.
 class _OfflineCard extends StatefulWidget {
   const _OfflineCard({this.lastSeen});
   final DateTime? lastSeen;
@@ -288,57 +287,78 @@ class _OfflineCardState extends State<_OfflineCard>
         ),
         border: Border.all(color: C.outline.withValues(alpha: 0.6)),
       ),
-      child: Stack(
+      padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.lg, S.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(S.xl),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            children: [
+              Expanded(
+                child: Text(
                   seen == null ? 'Not seen yet' : 'Last seen ${fmtAgo(seen)}',
                   style: t.titleSmall?.copyWith(color: C.text2),
                 ),
-                const SizedBox(height: S.lg),
-                Row(
+              ),
+              const StatusPill(kind: PillKind.offline, label: 'Offline'),
+            ],
+          ),
+          const SizedBox(height: S.lg),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'No power or internet',
-                        style: t.headlineSmall,
-                      ),
+                    Text(
+                      'Meter is offline',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.headlineSmall,
                     ),
-                    const SizedBox(width: S.lg),
-                    SizedBox(
-                      width: 92,
-                      height: 92,
-                      child: CustomPaint(
-                        painter: _RingPainter(0, accent),
-                        child: AnimatedBuilder(
-                          animation: _pulse,
-                          builder: (_, child) => CustomPaint(
-                            painter: _PulsePainter(_pulse.value, accent),
-                            child: child,
-                          ),
-                          child: const Center(
-                            child: Icon(
+                    const SizedBox(height: S.xs),
+                    Text(
+                      'Power or internet may be down.',
+                      style: t.bodyMedium?.copyWith(color: C.text2),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: S.md),
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: AnimatedBuilder(
+                  animation: _pulse,
+                  builder: (_, _) {
+                    // one full sine wave per loop, so the end meets the start
+                    final breath = (1 - cos(2 * pi * _pulse.value)) / 2;
+                    return CustomPaint(
+                      painter: _PulsePainter(_pulse.value, accent),
+                      child: Center(
+                        child: Transform.scale(
+                          scale: 1 + 0.06 * breath,
+                          child: Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: accent.withValues(
+                                alpha: 0.12 + 0.08 * breath,
+                              ),
+                            ),
+                            child: const Icon(
                               Icons.power_off_rounded,
                               color: accent,
-                              size: 30,
+                              size: 24,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              ],
-            ),
-          ),
-          const Positioned(
-            top: S.md,
-            right: S.md,
-            child: StatusPill(kind: PillKind.offline, label: 'Offline'),
+              ),
+            ],
           ),
         ],
       ),
@@ -346,7 +366,8 @@ class _OfflineCardState extends State<_OfflineCard>
   }
 }
 
-/// Two rings growing out from the centre and fading, half a cycle apart.
+/// Two ripples growing out from the icon, half a loop apart. Each fades in
+/// and out, so none pops into view when the loop restarts.
 class _PulsePainter extends CustomPainter {
   _PulsePainter(this.t, this.color);
   final double t;
@@ -355,15 +376,20 @@ class _PulsePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
-    const r0 = 20.0;
-    final rMax = size.shortestSide / 2 - 12; // stays inside the gauge track
+    const r0 = 23.0; // the icon's circle
+    final rMax = size.shortestSide / 2 - 1;
     for (final phase in [0.0, 0.5]) {
       final p = (t + phase) % 1.0;
+      final fade = sin(pi * p); // 0 -> 1 -> 0
       final paint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = color.withValues(alpha: 0.6 * (1 - p));
-      canvas.drawCircle(c, r0 + (rMax - r0) * p, paint);
+        ..strokeWidth = 1.5
+        ..color = color.withValues(alpha: 0.5 * fade);
+      canvas.drawCircle(
+        c,
+        r0 + (rMax - r0) * Curves.easeOut.transform(p),
+        paint,
+      );
     }
   }
 
