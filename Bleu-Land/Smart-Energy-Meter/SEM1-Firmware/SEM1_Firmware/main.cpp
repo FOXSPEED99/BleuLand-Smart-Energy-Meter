@@ -26,6 +26,7 @@
 #include "local_api.h"
 #include "meter.h"
 #include "net.h"
+#include "ota.h"
 #include "settings.h"
 
 
@@ -365,6 +366,7 @@ void sem1Setup() {
   Serial.begin(115200);
   delay(50);
   Serial.printf("\nSEM-1 firmware %s (%s)\n", SEM1_FW_VERSION, SEM1_HW_NAME);
+  ota::begin();
 
   // Safety net in case partitions.csv and the IDE's Partition Scheme ever differ.
   const esp_partition_t* slot = esp_ota_get_running_partition();
@@ -409,6 +411,7 @@ void sem1Setup() {
 
 void sem1Loop() {
   net::loop();
+  ota::loop();
   clockLoop();
   logLoop();
   backupLoop();

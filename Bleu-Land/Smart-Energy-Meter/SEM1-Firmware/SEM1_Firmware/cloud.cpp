@@ -9,6 +9,7 @@
 #include "cloud_certs.h"
 #include "config.h"
 #include "net.h"
+#include "ota.h"
 #include "settings.h"
 
 namespace {
@@ -16,6 +17,12 @@ volatile CloudState st = CloudState::Off;
 volatile bool isClaimed = false;
 volatile uint32_t lastOk = 0;
 volatile bool fastLive = false;  // the cloud says someone is watching live
+
+// Update the owner asked for, handed to us by device_push.
+struct PendingOta {
+  String version, url, md5;
+  size_t size = 0;
+} pendingOta;
 String lastErr;  // written by the cloud task only
 SemaphoreHandle_t errMtx;
 
@@ -70,6 +77,7 @@ bool hello() {
     return false;
   }
   isClaimed = res["claimed"] | false;
+  ota::markHealthy();  // a new firmware proves itself by getting this far
   Serial.printf("[cloud] registered, %s\n", isClaimed ? "linked to an account" : "not yet added to an account");
   return true;
 }
@@ -137,6 +145,16 @@ bool push(bool* more) {
     setError(e == "auth" ? CloudState::AuthError : CloudState::Error, "upload rejected: " + e);
     return false;
   }
+  JsonObjectConst o = res["ota"];
+  if (!o.isNull()) {
+    String v = o["version"] | "";
+    if (v.length() && v != SEM1_FW_VERSION && !pendingOta.size) {
+      pendingOta.version = v;
+      pendingOta.url = o["url"] | "";
+      pendingOta.md5 = o["md5"] | "";
+      pendingOta.size = o["size"] | 0;
+    }
+  }
   bool fast = res["fast"] | false;
   if (fast != fastLive) Serial.printf("[cloud] live updates every %u s\n", (unsigned)(fast ? CLOUD_FAST_S : CLOUD_LIVE_S));
   fastLive = fast;
@@ -145,6 +163,39 @@ bool push(bool* more) {
   else if (resume > app::uploadedSeq() + 1) app::setUploadedSeq(resume - 1);
   *more = resume < app::log().nextSeq();
   return true;
+}
+
+// Tell the cloud how the update is going (the app shows it).
+void report(const char* status, const String& err = String()) {
+  const Identity& id = settings::identity();
+  JsonDocument body, res;
+  body["p_id"] = id.deviceId;
+  body["p_secret"] = id.secret;
+  body["p_status"] = status;
+  if (err.length()) body["p_error"] = err;
+  int code = callRpc("device_ota", body, res);
+  if (code != 200) Serial.printf("[ota] couldn't report \"%s\": HTTP %d\n", status, code);
+}
+
+void runOta() {
+  PendingOta o = pendingOta;
+  pendingOta = PendingOta();
+  Serial.printf("[ota] update %s -> %s requested from the app\n", SEM1_FW_VERSION, o.version.c_str());
+  report("downloading");
+  http.end();
+  tls.stop();  // one TLS connection at a time: the download opens its own
+  String err = ota::install(o.url.c_str(), o.size, o.md5.c_str());
+  if (err.length()) {
+    Serial.printf("[ota] failed: %s\n", err.c_str());
+    report("failed", err);
+    return;
+  }
+  report("installing");
+  http.end();
+  tls.stop();
+  Serial.printf("[ota] restarting into %s\n", o.version.c_str());
+  delay(500);
+  ESP.restart();
 }
 
 void cloudTask(void*) {
@@ -168,6 +219,7 @@ void cloudTask(void*) {
     if (!registered) ok = registered = hello();
     else ok = push(&more);
 
+    if (ok && pendingOta.size) runOta();  // returns only if the update failed
     if (ok) {
       if (st != CloudState::Ok) Serial.println("[cloud] connected");
       st = CloudState::Ok;

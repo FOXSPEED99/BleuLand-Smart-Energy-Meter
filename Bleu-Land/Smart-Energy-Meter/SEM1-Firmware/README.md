@@ -36,10 +36,35 @@ The firmware picks the right pins and CT values from the board you select; you d
   - The cloud work runs in its own background task, so a slow connection never freezes anything else.
   - Status shows on the web page, in `info`, and on the blue LED.
 
+- **Updates over WiFi (from 0.3.0).** The owner taps *Update* in the app; see below.
+
 Coming next:
 
-- OTA updates from the cloud
 - MQTT / Home Assistant
+
+## Updates over WiFi
+
+Flash **0.3.0 or newer by USB once**; after that, new firmware arrives over WiFi.
+
+How a new version reaches a meter:
+
+1. A firmware change is pushed to GitHub. The **"Firmware: build & publish"** action builds it for the DevKit and the C3 and uploads it to the cloud:
+   - from `main`: **stable**, offered to every meter;
+   - from any other branch: **beta** (test builds), offered only to meters on the beta channel (yours is).
+   A version number is published once, so each release raises `SEM1_FW_VERSION` in `config.h`.
+2. The app shows **Settings → Firmware → "Version x available"**. Only the owner can tap **Update now**; nothing installs by itself.
+3. The meter downloads the file into its **spare program slot** while it keeps measuring, checks its size and MD5, then restarts into it (about a minute).
+4. The new version is **on probation** until it reaches the cloud. If it crashes, or can't reach the cloud within 10 minutes, the chip **goes back to the previous version by itself** and the app says the update didn't finish.
+
+The Serial Monitor shows each step (`[ota] ...`); the `ota` command shows which slot is running.
+
+### One-time setup: let GitHub publish firmware
+
+GitHub needs a key to upload firmware to Supabase. Until it has one, the action still builds the files (Actions → run → Artifacts) but doesn't publish them.
+
+1. Supabase dashboard → project **bleuland-energy** → **Project Settings → API Keys** → **Secret keys** → **+ New secret key**. Name it `github-firmware` and copy it (it starts with `sb_secret_`).
+2. GitHub → this repository → **Settings → Secrets and variables → Actions** → **New repository secret**. Name: `SUPABASE_SECRET_KEY`, value: the key. Save.
+3. Never paste this key anywhere else (chat, code, e-mail): it has full access to the database. If it leaks, delete it in Supabase and make a new one.
 
 ## Arduino IDE setup (one time)
 
@@ -156,6 +181,7 @@ cal reset             back to 1.0 / 1.0 / 1.0
 energy int|pf         energy from P x dt (default) or the PF pulse counter
 time <unix>           set the clock by hand (UTC)
 log [n]               last n history records
+ota                   firmware slots and update state
 wifi-reset            forget WiFi, restart into phone setup
 factory-reset         also forget the owner
 reboot
@@ -180,7 +206,7 @@ The decoder, energy maths and flash log (including power cuts in the middle of a
 ```
 SEM1_Firmware/                    the Arduino sketch: every file below opens as a tab
   SEM1_Firmware.ino   setup() / loop(): open this one
-  partitions.csv      flash layout: 2 x 1.875 MB app slots (for safe OTA) + 128 KB history log + crash dump
+  partitions.csv      flash layout: 2 x 1.94 MB app slots (for safe updates) + 64 KB history log
   main.cpp            sem1Setup()/sem1Loop(): start-up, metering task, clock, history log, button
   board.h             pin maps + CT values for both boards
   config.h            timings and front-end coefficients
@@ -191,9 +217,11 @@ SEM1_Firmware/                    the Arduino sketch: every file below opens as 
   local_api.cpp       web page + JSON API
   rtc_ds1307.cpp      clock + energy backup in RTC RAM
   settings.cpp        calibration, identity (device ID, QR code, cloud secret)
+  ota.cpp             updates over WiFi: download, check, probation, rollback
   console.cpp         serial commands
   leds.cpp            LED patterns
 test/               PC unit tests
+tools/publish.sh    used by GitHub Actions to publish a build for updates over WiFi
 ```
 
 ## For the production PCB (ESP32-C3), hardware requests
@@ -222,9 +250,11 @@ Each app slot holds 2,031,616 bytes (the IDE's "Maximum is 2031616 bytes"). To m
 
 | Board package | ESP32-C3 (production) | DevKit (prototype) |
 |---|---|---|
-| 3.3.12 | 1.57 MB (77%) | 1.92 MB (94%) |
-| 3.3.4 | 1.52 MB (74%) | 1.91 MB (93%) |
-| 2.0.17 | 1.66 MB (82%) | 1.79 MB (88%) |
+| 3.3.12 | 1.60 MB (78%) | 1.95 MB (95%) |
+| 3.3.4 | 1.54 MB (76%) | 1.93 MB (95%) |
+| 2.0.17 | 1.69 MB (83%) | 1.81 MB (89%) |
+
+(0.3.0, with updates over WiFi. GitHub builds with 3.3.12.)
 
 - **The production C3 has room** for the next features: over-the-air updates, MQTT.
 - **The classic-ESP32 DevKit is close to full on core 3.x.** Its Bluetooth stack is about 0.8 MB, and the HTTPS cloud link added about 130 KB.

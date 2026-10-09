@@ -6,6 +6,7 @@
 #include "cloud.h"
 #include "config.h"
 #include "net.h"
+#include "ota.h"
 #include "settings.h"
 
 namespace {
@@ -73,11 +74,14 @@ void run(String cmd) {
         "energy int|pf         energy from P x dt (default) or the PF pulse counter\n"
         "time <unix>           set the clock by hand (UTC)\n"
         "log [n]               last n history records\n"
+        "ota                   firmware slots and update state\n"
         "wifi-reset            forget WiFi, restart into phone setup\n"
         "factory-reset         also forget the owner\n"
         "reboot");
   } else if (word == "info") {
     printInfo();
+  } else if (word == "ota") {
+    ota::printInfo();
   } else if (word == "qr") {
     Serial.println(settings::qrPayload());
   } else if (word == "cal") {
