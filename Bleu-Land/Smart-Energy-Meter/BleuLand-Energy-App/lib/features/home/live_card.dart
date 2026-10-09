@@ -285,9 +285,8 @@ class _OfflineCardState extends State<_OfflineCard>
           colors: [Color(0xFF33201F), C.surface, C.surface],
           stops: [0, 0.55, 1],
         ),
-        border: Border.all(color: C.outline.withValues(alpha: 0.6)),
       ),
-      padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.lg, S.xxl),
+      padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.lg, S.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -295,14 +294,16 @@ class _OfflineCardState extends State<_OfflineCard>
             children: [
               Expanded(
                 child: Text(
-                  seen == null ? 'Not seen yet' : 'Last seen ${fmtAgo(seen)}',
-                  style: t.titleSmall?.copyWith(color: C.text2),
+                  seen == null
+                      ? 'Not seen yet'
+                      : 'Last seen ${fmtAgoLong(seen)}',
+                  style: t.titleSmall?.copyWith(color: C.text2, fontSize: 13),
                 ),
               ),
               const StatusPill(kind: PillKind.offline, label: 'Offline'),
             ],
           ),
-          const SizedBox(height: S.xl),
+          const SizedBox(height: S.md),
           Row(
             children: [
               Expanded(
@@ -325,8 +326,8 @@ class _OfflineCardState extends State<_OfflineCard>
               ),
               const SizedBox(width: S.md),
               SizedBox(
-                width: 80,
-                height: 80,
+                width: 76,
+                height: 76,
                 child: AnimatedBuilder(
                   animation: _pulse,
                   builder: (_, _) {
