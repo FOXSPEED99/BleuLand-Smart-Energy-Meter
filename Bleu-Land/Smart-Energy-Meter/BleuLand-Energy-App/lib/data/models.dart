@@ -32,6 +32,22 @@ class Meter {
 
   bool get isOwner => role == 'owner';
 
+  Meter withFw(String version) => Meter(
+        id: id,
+        name: name,
+        role: role,
+        fw: version,
+        lastSeen: lastSeen,
+        timezone: timezone,
+        currency: currency,
+        tariff: tariff,
+        billingDay: billingDay,
+        alertPowerW: alertPowerW,
+        alertOfflineMin: alertOfflineMin,
+        voltMin: voltMin,
+        voltMax: voltMax,
+      );
+
   Meter copyWith({
     String? name,
     String? currency,
@@ -140,3 +156,39 @@ class Invite {
 }
 
 enum ClaimResult { ok, wrongCode, notOnlineYet, alreadyClaimed, failed }
+
+/// Firmware on the meter and the newest one it may install.
+enum UpdateStage { none, requested, downloading, installing, done, failed }
+
+class FirmwareRelease {
+  const FirmwareRelease({required this.version, this.notes, this.size, this.beta = false, this.createdAt});
+  final String version;
+  final String? notes;
+  final int? size; // bytes
+  final bool beta;
+  final DateTime? createdAt;
+}
+
+class FirmwareStatus {
+  const FirmwareStatus({
+    this.current,
+    this.latest,
+    this.beta = false,
+    this.stage = UpdateStage.none,
+    this.target,
+    this.error,
+    this.stageAt,
+  });
+  final String? current;
+  final FirmwareRelease? latest; // null = up to date
+  final bool beta; // this meter is on the test channel
+  final UpdateStage stage;
+  final String? target; // version being installed
+  final String? error;
+  final DateTime? stageAt;
+
+  bool get updating =>
+      stage == UpdateStage.requested || stage == UpdateStage.downloading || stage == UpdateStage.installing;
+}
+
+enum UpdateRequest { ok, upToDate, busy, notOwner, failed }

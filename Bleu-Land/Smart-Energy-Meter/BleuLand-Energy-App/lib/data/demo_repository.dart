@@ -15,11 +15,11 @@ class DemoRepository implements EnergyRepository {
   @override
   bool get isDemo => true;
 
-  Meter _meter = const Meter(
+  Meter _meter = Meter(
     id: 'SEM1-DE0001',
     name: 'Demo home',
     role: 'owner',
-    fw: '0.1.0',
+    fw: '0.2.0',
     alertPowerW: 2500,
   );
   final List<Invite> _invites = [];
@@ -189,6 +189,46 @@ class DemoRepository implements EnergyRepository {
 
   @override
   Future<ClaimResult> claim(String meterId, String pop, String name) async => ClaimResult.ok;
+
+  // Firmware: a pretend update that runs through every stage in ~25 s.
+  String get _fw => _meter.fw ?? '0.2.0';
+  DateTime? _updateStarted;
+
+  @override
+  Future<FirmwareStatus> firmware(String meterId) async {
+    const next = FirmwareRelease(
+      version: '0.3.0',
+      notes: 'Updates over WiFi, voltage alerts, faster live values',
+      size: 1946288,
+    );
+    final s = _updateStarted;
+    if (s == null) return FirmwareStatus(current: _fw, latest: _fw == next.version ? null : next);
+    final t = DateTime.now().difference(s).inSeconds;
+    final stage = t < 4
+        ? UpdateStage.requested
+        : t < 18
+            ? UpdateStage.downloading
+            : t < 26
+                ? UpdateStage.installing
+                : UpdateStage.done;
+    if (stage == UpdateStage.done && _meter.fw != next.version) _meter = _meter.withFw(next.version);
+    return FirmwareStatus(
+      current: _fw,
+      latest: stage == UpdateStage.done ? null : next,
+      stage: stage,
+      target: next.version,
+      stageAt: s,
+    );
+  }
+
+  @override
+  Future<UpdateRequest> requestUpdate(String meterId) async {
+    _updateStarted = DateTime.now();
+    return UpdateRequest.ok;
+  }
+
+  @override
+  Future<void> cancelUpdate(String meterId) async => _updateStarted = null;
 
   @override
   Future<List<Invite>> invites(String meterId) async => List.of(_invites);

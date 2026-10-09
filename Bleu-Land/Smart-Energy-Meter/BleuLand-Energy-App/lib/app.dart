@@ -11,6 +11,7 @@ import 'features/auth/welcome_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/add_meter_screen.dart';
+import 'features/settings/firmware_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/sharing_screen.dart';
 import 'features/settings/tariff_screen.dart';
@@ -41,6 +42,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/add-meter', builder: (_, _) => const AddMeterScreen()),
       GoRoute(path: '/settings/tariff', builder: (_, _) => const TariffScreen()),
+      GoRoute(path: '/settings/firmware', builder: (_, _) => const FirmwareScreen()),
       GoRoute(path: '/settings/sharing', builder: (_, _) => const SharingScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Shell(shell: shell),

@@ -154,7 +154,7 @@ Next stages:
 
 1. Supabase schema + device ingest (device authenticates with its per-unit secret, records keyed by device + timestamp) + upload of the flash log.
 2. Flutter app with BLE onboarding (QR → WiFi → claim code), live view, history, tariff/cost, alerts, sharing.
-3. OTA from the cloud.
+3. ~~OTA from the cloud~~ done (fw 0.3.0): GitHub Actions `firmware.yml` builds both boards with core 3.3.12 and publishes via `SEM1-Firmware/tools/publish.sh` (needs repo secret `SUPABASE_SECRET_KEY`; main → stable, other branches → beta; a version is published once, so bump `SEM1_FW_VERSION`). Owner taps Update in the app (`request_update`); `device_push` returns `ota`; meter downloads into the spare slot (Update lib + MD5), reports via `device_ota`, restarts; `verifyRollbackLater()` keeps it on probation until cloud hello succeeds (10-min timeout → bootloader rollback). Fox chose: updates only when the owner taps, also for his own (beta-channel) meter.
 4. MQTT / Home Assistant.
 
 Open hardware items for the C3 PCB:

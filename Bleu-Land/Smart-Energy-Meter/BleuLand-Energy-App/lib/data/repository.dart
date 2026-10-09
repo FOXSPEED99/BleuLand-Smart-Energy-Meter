@@ -21,6 +21,11 @@ abstract class EnergyRepository {
 
   Future<ClaimResult> claim(String meterId, String pop, String name);
 
+  /// Firmware updates over WiFi (owner taps "Update").
+  Future<FirmwareStatus> firmware(String meterId);
+  Future<UpdateRequest> requestUpdate(String meterId);
+  Future<void> cancelUpdate(String meterId);
+
   Future<List<Invite>> invites(String meterId);
   Future<int> memberCount(String meterId);
   Future<void> invite(String meterId, String email);

@@ -80,6 +80,10 @@ final power24hProvider = FutureProvider.family<List<PowerPoint>, String>(
   (ref, id) => ref.watch(repositoryProvider).power(id, DateTime.now().subtract(const Duration(hours: 24))),
 );
 
+final firmwareProvider = FutureProvider.family<FirmwareStatus, String>(
+  (ref, id) => ref.watch(repositoryProvider).firmware(id),
+);
+
 final alertsProvider = FutureProvider.family<List<AlertItem>, String>(
   (ref, id) => ref.watch(repositoryProvider).alerts(id),
 );

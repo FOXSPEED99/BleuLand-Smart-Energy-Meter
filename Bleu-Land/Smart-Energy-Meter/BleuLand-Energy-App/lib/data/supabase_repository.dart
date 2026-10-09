@@ -187,6 +187,59 @@ class SupabaseRepository implements EnergyRepository {
   }
 
   @override
+  Future<FirmwareStatus> firmware(String meterId) async {
+    final r = await _db.rpc('firmware_status', params: {'p_id': meterId});
+    if (r == null) return const FirmwareStatus();
+    final m = Map<String, dynamic>.from(r as Map);
+    final l = m['latest'] == null ? null : Map<String, dynamic>.from(m['latest'] as Map);
+    return FirmwareStatus(
+      current: m['current'] as String?,
+      beta: m['channel'] == 'beta',
+      latest: l == null
+          ? null
+          : FirmwareRelease(
+              version: l['version'] as String,
+              notes: l['notes'] as String?,
+              size: (l['size'] as num?)?.toInt(),
+              beta: l['channel'] == 'beta',
+              createdAt: _ts(l['created_at']),
+            ),
+      stage: switch (m['status']) {
+        'requested' => UpdateStage.requested,
+        'downloading' => UpdateStage.downloading,
+        'installing' => UpdateStage.installing,
+        'done' => UpdateStage.done,
+        'failed' => UpdateStage.failed,
+        _ => UpdateStage.none,
+      },
+      target: m['target'] as String?,
+      error: m['error'] as String?,
+      stageAt: _ts(m['at']),
+    );
+  }
+
+  @override
+  Future<UpdateRequest> requestUpdate(String meterId) async {
+    try {
+      final r = Map<String, dynamic>.from(await _db.rpc('request_update', params: {'p_id': meterId}) as Map);
+      if (r['ok'] == true) return UpdateRequest.ok;
+      return switch (r['error']) {
+        'up_to_date' => UpdateRequest.upToDate,
+        'busy' => UpdateRequest.busy,
+        'not_owner' => UpdateRequest.notOwner,
+        _ => UpdateRequest.failed,
+      };
+    } catch (_) {
+      return UpdateRequest.failed;
+    }
+  }
+
+  @override
+  Future<void> cancelUpdate(String meterId) async {
+    await _db.rpc('cancel_update', params: {'p_id': meterId});
+  }
+
+  @override
   Future<List<Invite>> invites(String meterId) async {
     final rows = await _db.from('invites').select().eq('device_id', meterId).order('created_at');
     return [

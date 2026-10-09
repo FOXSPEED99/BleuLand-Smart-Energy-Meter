@@ -47,6 +47,7 @@ class SettingsScreen extends ConsumerWidget {
                 value: meter.isOwner ? 'Invite by e-mail' : 'Shared with you',
                 onTap: meter.isOwner ? () => context.push('/settings/sharing') : null,
               ),
+              _FirmwareRow(meter: meter),
             ]),
           ],
           const SectionHeader('Meters'),
@@ -156,6 +157,38 @@ class _MeterHeader extends ConsumerWidget {
   }
 
   static String _signal(int rssi) => rssi > -60 ? 'excellent' : rssi > -70 ? 'good' : rssi > -80 ? 'fair' : 'weak';
+}
+
+/// "Firmware 0.3.0 · up to date", or a highlighted "update available".
+class _FirmwareRow extends ConsumerWidget {
+  const _FirmwareRow({required this.meter});
+  final Meter meter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    final s = ref.watch(firmwareProvider(meter.id)).value;
+    final current = s?.current ?? meter.fw ?? '–';
+    final (String value, bool attention) = s == null
+        ? (current, false)
+        : s.updating
+            ? ('Updating to ${s.target}…', true)
+            : s.latest != null
+                ? ('$current · version ${s.latest!.version} available', true)
+                : ('$current · up to date', false);
+    return ListTile(
+      onTap: () => context.push('/settings/firmware'),
+      leading: Badge(
+        isLabelVisible: attention,
+        backgroundColor: C.brand,
+        smallSize: 8,
+        child: const Icon(Icons.memory_rounded, color: C.text2),
+      ),
+      title: Text('Firmware', style: t.bodyLarge),
+      subtitle: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: attention ? TextStyle(color: C.brand) : null),
+      trailing: const Icon(Icons.chevron_right_rounded, color: C.text3),
+    );
+  }
 }
 
 class _Group extends StatelessWidget {
