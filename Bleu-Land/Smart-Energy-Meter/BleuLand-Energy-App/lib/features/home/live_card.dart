@@ -248,9 +248,9 @@ class _UsageNote extends StatelessWidget {
 }
 
 /// The meter isn't reporting. Same shape as the live card, so it reads as the
-/// same card in another state: the coral pill in the corner, how long ago it
-/// was last heard as the big text, one short reason, and an empty gauge with
-/// a pulse that shows the app is still listening for it.
+/// same card in another state: the coral pill in the corner, when it was last
+/// heard, one short reason, and an empty gauge with a pulse that shows the app
+/// is still listening for it.
 class _OfflineCard extends StatefulWidget {
   const _OfflineCard({this.lastSeen});
   final DateTime? lastSeen;
@@ -277,11 +277,6 @@ class _OfflineCardState extends State<_OfflineCard>
     final t = Theme.of(context).textTheme;
     const accent = C.criticalText;
     final seen = widget.lastSeen;
-    // "4 h ago" -> big "4 h" + small "ago", like "640 W"
-    final ago = seen == null ? 'Not yet' : fmtAgo(seen);
-    final split = ago.endsWith(' ago');
-    final big = split ? ago.substring(0, ago.length - 4) : ago;
-
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(R.xl),
@@ -301,55 +296,16 @@ class _OfflineCardState extends State<_OfflineCard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  seen == null ? 'Meter' : 'Last seen',
+                  seen == null ? 'Not seen yet' : 'Last seen ${fmtAgo(seen)}',
                   style: t.titleSmall?.copyWith(color: C.text2),
                 ),
-                const SizedBox(height: S.xl),
+                const SizedBox(height: S.lg),
                 Row(
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text.rich(
-                              TextSpan(
-                                children: [
-                                  TextSpan(text: big, style: t.displayLarge),
-                                  if (split)
-                                    TextSpan(
-                                      text: ' ago',
-                                      style: t.titleLarge?.copyWith(
-                                        color: C.text2,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: S.sm),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.wifi_off_rounded,
-                                size: 15,
-                                color: accent,
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  'No power or internet',
-                                  style: t.labelLarge?.copyWith(
-                                    color: C.text2,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                      child: Text(
+                        'No power or internet',
+                        style: t.headlineSmall,
                       ),
                     ),
                     const SizedBox(width: S.lg),
