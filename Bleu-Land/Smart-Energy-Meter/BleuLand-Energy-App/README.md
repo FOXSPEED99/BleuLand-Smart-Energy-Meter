@@ -7,7 +7,7 @@ One Flutter codebase builds the **Android**, **iOS** and **web** versions. It ha
 | Screen | What it shows |
 |---|---|
 | **Welcome** | Create account · Sign in · **Try the demo** (a simulated Syrian home; no meter needed) |
-| **Home** | Live power with a usage ring and a usage level (light / moderate / high / very high, compared with today's average); "unknown" with the last reading when the meter is offline; voltage, current and power factor; **voltage** card (live volts on a scale with the normal range, status and advice, today's lowest/highest); **this bill** in SYP with the cheap-block progress bar and an *"at this pace"* forecast; today's kWh and cost vs yesterday; power over the last 24 h |
+| **Home** | Live power with a usage ring and a usage level (light / moderate / high / very high, compared with today's average); a plain "Offline" (no numbers) when the meter is offline; voltage, current and power factor; **voltage** card (live volts on a scale with the normal range, status and advice, today's lowest/highest); **this bill** in SYP with the cheap-block progress bar and an *"at this pace"* forecast; today's kWh and cost vs yesterday; power over the last 24 h |
 | **History** | Day / Week / Month / Year charts; total, average and peak; tap a bar for its value |
 | **Alerts** | High-usage alert (slider), offline alert, voltage alert (normal range, editable), and the list of past alerts |
 | **Settings** | Meter info, name, **electricity price** (blocks, 1- or 2-month bills, billing day, currency), **share with family** by e-mail, **WiFi** (network, signal; change it over Bluetooth, or fix it when the meter is offline), **firmware** (version, "update available", Update now with live progress), add a meter, sign out |

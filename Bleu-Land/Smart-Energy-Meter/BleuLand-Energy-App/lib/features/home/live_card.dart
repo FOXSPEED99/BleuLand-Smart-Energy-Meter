@@ -18,13 +18,11 @@ class LiveCard extends StatefulWidget {
     required this.meter,
     this.loading = false,
     this.todayKwh,
-    this.onFixWifi,
   });
   final LiveReading? reading;
   final Meter meter;
   final bool loading;
   final double? todayKwh; // for "compared with your average today"
-  final VoidCallback? onFixWifi; // offline: open the WiFi screen
 
   @override
   State<LiveCard> createState() => _LiveCardState();
@@ -33,7 +31,10 @@ class LiveCard extends StatefulWidget {
 class _LiveCardState extends State<LiveCard> {
   // Re-check the reading's age even when no new value arrives, so a meter
   // that stops reporting turns "offline" on its own.
-  late final Timer _tick = Timer.periodic(const Duration(seconds: 5), (_) => setState(() {}));
+  late final Timer _tick = Timer.periodic(
+    const Duration(seconds: 5),
+    (_) => setState(() {}),
+  );
 
   @override
   void dispose() {
@@ -46,14 +47,18 @@ class _LiveCardState extends State<LiveCard> {
     final t = Theme.of(context).textTheme;
     final r = widget.reading;
     final now = DateTime.now();
-    final offline = !widget.loading && (r == null || now.difference(r.ts) > AppConfig.offlineAfter);
+    final offline =
+        !widget.loading &&
+        (r == null || now.difference(r.ts) > AppConfig.offlineAfter);
     final known = !widget.loading && !offline;
     final watts = known ? r!.watts : 0.0;
 
     // ring scale: the alert threshold if set, otherwise 5 kW
     final scale = (widget.meter.alertPowerW ?? 5000).toDouble();
     final frac = (watts / scale).clamp(0.0, 1.0);
-    final ringColor = frac >= 1 ? C.critical : (frac >= 0.8 ? C.warning : C.brand);
+    final ringColor = frac >= 1
+        ? C.critical
+        : (frac >= 0.8 ? C.warning : C.brand);
 
     return Container(
       decoration: BoxDecoration(
@@ -66,55 +71,84 @@ class _LiveCardState extends State<LiveCard> {
         ),
         border: Border.all(color: C.outline.withValues(alpha: 0.6)),
       ),
-      child: Stack(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(S.xl, S.xl, S.xl, S.lg),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Using now', style: t.titleSmall?.copyWith(color: C.text2)),
-            const SizedBox(height: S.xl),
-            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  if (known)
-                    _CountingPower(watts: watts)
-                  else
-                    Text.rich(TextSpan(children: [
-                      TextSpan(text: '––', style: t.displayLarge?.copyWith(color: C.text3)),
-                      TextSpan(text: ' W', style: t.titleLarge?.copyWith(color: C.text3)),
-                    ])),
-                  const SizedBox(height: S.sm),
-                  if (widget.loading)
-                    Text('Connecting to your meter…', style: t.bodySmall?.copyWith(color: C.text2))
-                  else if (offline)
-                    _OfflineNote(reading: r, onFixWifi: widget.onFixWifi)
-                  else
-                    _UsageNote(watts: watts, todayKwh: widget.todayKwh),
-                ]),
-              ),
-              const SizedBox(width: S.lg),
-              _Ring(fraction: frac, color: ringColor, dim: !known),
-            ]),
-            const SizedBox(height: S.lg),
-            const Divider(),
-            const SizedBox(height: S.md),
-            Row(children: [
-              _Mini(label: 'Voltage', value: known ? r!.volts : null, format: fmtVolts),
-              _Mini(label: 'Current', value: known ? r!.amps : null, format: fmtAmps),
-              _Mini(label: 'Power factor', value: known ? r!.pf : null, format: fmtPf),
-            ]),
-          ]),
-        ),
-        // status sits in the card's corner, clear of the ring
-        Positioned(
-          top: S.md,
-          right: S.md,
-          child: widget.loading
-              ? const StatusPill(kind: PillKind.info, label: 'Connecting…')
-              : offline
-                  ? StatusPill(kind: PillKind.offline, label: r == null ? 'No data yet' : 'Offline · ${fmtAgo(r.ts)}')
-                  : const StatusPill(kind: PillKind.live, label: 'Live'),
-        ),
-      ]),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(S.xl, S.xl, S.xl, S.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Using now',
+                  style: t.titleSmall?.copyWith(color: C.text2),
+                ),
+                const SizedBox(height: S.xl),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (known) ...[
+                            _CountingPower(watts: watts),
+                            const SizedBox(height: S.sm),
+                            _UsageNote(watts: watts, todayKwh: widget.todayKwh),
+                          ] else ...[
+                            // Offline: no number at all, the usage is simply unknown.
+                            Text(
+                              widget.loading ? 'Connecting…' : 'Offline',
+                              style: t.displaySmall?.copyWith(color: C.text2),
+                            ),
+                            const SizedBox(height: S.sm),
+                            Text(
+                              widget.loading ? 'Getting the latest reading.' : 'Live usage shows again when the meter reconnects.',
+                              style: t.bodySmall?.copyWith(color: C.text2),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: S.lg),
+                    _Ring(fraction: frac, color: ringColor, dim: !known),
+                  ],
+                ),
+                if (known) ...[
+                  const SizedBox(height: S.lg),
+                  const Divider(),
+                  const SizedBox(height: S.md),
+                  Row(
+                    children: [
+                      _Mini(
+                        label: 'Voltage',
+                        value: r!.volts,
+                        format: fmtVolts,
+                      ),
+                      _Mini(label: 'Current', value: r.amps, format: fmtAmps),
+                      _Mini(label: 'Power factor', value: r.pf, format: fmtPf),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // status sits in the card's corner, clear of the ring
+          Positioned(
+            top: S.md,
+            right: S.md,
+            child: widget.loading
+                ? const StatusPill(kind: PillKind.info, label: 'Connecting…')
+                : offline
+                ? StatusPill(
+                    kind: PillKind.offline,
+                    label: r == null
+                        ? 'No data yet'
+                        : 'Last seen ${fmtAgo(r.ts)}',
+                  )
+                : const StatusPill(kind: PillKind.live, label: 'Live'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -137,10 +171,22 @@ class _CountingPower extends StatelessWidget {
         return FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text.rich(TextSpan(children: [
-            TextSpan(text: p.value, style: t.displayLarge?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-            TextSpan(text: ' ${p.unit}', style: t.titleLarge?.copyWith(color: C.text2)),
-          ])),
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: p.value,
+                  style: t.displayLarge?.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                TextSpan(
+                  text: ' ${p.unit}',
+                  style: t.titleLarge?.copyWith(color: C.text2),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -163,93 +209,79 @@ class _UsageNote extends StatelessWidget {
       UsageLevel.high => (C.warning, Icons.trending_up_rounded),
       UsageLevel.veryHigh => (C.serious, Icons.warning_amber_rounded),
     };
-    final vs = todayKwh == null ? null : versusToday(watts, todayKwh: todayKwh!, now: DateTime.now());
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: Row(key: ValueKey(level), mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 15, color: c),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text.rich(TextSpan(children: [
-              TextSpan(text: level.label, style: t.labelLarge?.copyWith(color: C.text)),
-              TextSpan(text: ' · ${level.range}', style: t.labelLarge?.copyWith(color: C.text2, fontWeight: FontWeight.w400)),
-            ])),
+    final vs = todayKwh == null
+        ? null
+        : versusToday(watts, todayKwh: todayKwh!, now: DateTime.now());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: Row(
+            key: ValueKey(level),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: c),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: level.label,
+                        style: t.labelLarge?.copyWith(color: C.text),
+                      ),
+                      TextSpan(
+                        text: ' · ${level.range}',
+                        style: t.labelLarge?.copyWith(
+                          color: C.text2,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ]),
-      ),
-      if (vs != null) ...[
-        const SizedBox(height: 2),
-        Text(vs, style: t.bodySmall?.copyWith(color: C.text2)),
-      ],
-    ]);
-  }
-}
-
-/// Offline: the usage is unknown, not zero. Show the last value we had.
-class _OfflineNote extends StatelessWidget {
-  const _OfflineNote({required this.reading, this.onFixWifi});
-  final LiveReading? reading;
-  final VoidCallback? onFixWifi;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final r = reading;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Unknown right now', style: t.labelLarge?.copyWith(color: C.text)),
-      const SizedBox(height: 2),
-      Text(
-        r == null
-            ? 'The meter hasn\'t reported yet.'
-            : 'Last reading ${fmtPowerText(r.watts)}, ${fmtAgo(r.ts)}. '
-                'The meter may have lost power or internet; it keeps recording and catches up when it\'s back.',
-        style: t.bodySmall?.copyWith(color: C.text2),
-      ),
-      if (onFixWifi != null && r != null) ...[
-        const SizedBox(height: S.sm),
-        OutlinedButton.icon(
-          onPressed: onFixWifi,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 36),
-            padding: const EdgeInsets.symmetric(horizontal: S.md),
-            visualDensity: VisualDensity.compact,
-          ),
-          icon: const Icon(Icons.wifi_find_rounded, size: 18),
-          label: const Text('Changed your WiFi?'),
         ),
+        if (vs != null) ...[
+          const SizedBox(height: 2),
+          Text(vs, style: t.bodySmall?.copyWith(color: C.text2)),
+        ],
       ],
-    ]);
+    );
   }
 }
 
 class _Mini extends StatelessWidget {
   const _Mini({required this.label, required this.value, required this.format});
   final String label;
-  final double? value; // null = unknown
+  final double value;
   final String Function(double) format;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final v = value;
     return Expanded(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: t.labelSmall?.copyWith(color: C.text3)),
-        const SizedBox(height: 2),
-        if (v == null)
-          Text('–', style: t.titleSmall?.copyWith(color: C.text3))
-        else
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: t.labelSmall?.copyWith(color: C.text3)),
+          const SizedBox(height: 2),
           TweenAnimationBuilder<double>(
-            tween: Tween(end: v),
+            tween: Tween(end: value),
             duration: const Duration(milliseconds: 1600),
             curve: Curves.easeInOutCubic,
             builder: (_, x, _) => Text(
               format(x),
-              style: t.titleSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+              style: t.titleSmall?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -263,24 +295,24 @@ class _Ring extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 92,
-        height: 92,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(end: fraction),
-          duration: const Duration(milliseconds: 1600),
-          curve: Curves.easeInOutCubic,
-          builder: (_, f, _) => CustomPaint(
-            painter: _RingPainter(f, dim ? C.text3 : color),
-            child: Center(
-              child: Icon(
-                dim ? Icons.power_off_rounded : Icons.bolt_rounded,
-                color: dim ? C.text3 : color,
-                size: 34,
-              ),
-            ),
+    width: 92,
+    height: 92,
+    child: TweenAnimationBuilder<double>(
+      tween: Tween(end: fraction),
+      duration: const Duration(milliseconds: 1600),
+      curve: Curves.easeInOutCubic,
+      builder: (_, f, _) => CustomPaint(
+        painter: _RingPainter(f, dim ? C.text3 : color),
+        child: Center(
+          child: Icon(
+            dim ? Icons.power_off_rounded : Icons.bolt_rounded,
+            color: dim ? C.text3 : color,
+            size: 34,
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _RingPainter extends CustomPainter {
