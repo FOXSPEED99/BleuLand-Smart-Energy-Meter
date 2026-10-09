@@ -78,11 +78,20 @@ class _LiveCardState extends State<LiveCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Using now',
-                  style: t.titleSmall?.copyWith(color: C.text2),
-                ),
-                const SizedBox(height: S.xl),
+                // Offline: the "last seen" pill takes the title's place.
+                if (offline)
+                  StatusPill(
+                    kind: PillKind.offline,
+                    label: r == null
+                        ? 'No data yet'
+                        : 'Last seen ${fmtAgo(r.ts)}',
+                  )
+                else
+                  Text(
+                    'Using now',
+                    style: t.titleSmall?.copyWith(color: C.text2),
+                  ),
+                SizedBox(height: offline ? S.lg : S.xl),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -102,7 +111,7 @@ class _LiveCardState extends State<LiveCard> {
                             ),
                             const SizedBox(height: S.sm),
                             Text(
-                              widget.loading ? 'Getting the latest reading.' : 'Live usage shows again when the meter reconnects.',
+                              widget.loading ? 'Getting the latest reading.' : 'The meter may have lost power or internet. It keeps recording and catches up when it\'s back.',
                               style: t.bodySmall?.copyWith(color: C.text2),
                             ),
                           ],
@@ -133,20 +142,14 @@ class _LiveCardState extends State<LiveCard> {
             ),
           ),
           // status sits in the card's corner, clear of the ring
-          Positioned(
-            top: S.md,
-            right: S.md,
-            child: widget.loading
-                ? const StatusPill(kind: PillKind.info, label: 'Connecting…')
-                : offline
-                ? StatusPill(
-                    kind: PillKind.offline,
-                    label: r == null
-                        ? 'No data yet'
-                        : 'Last seen ${fmtAgo(r.ts)}',
-                  )
-                : const StatusPill(kind: PillKind.live, label: 'Live'),
-          ),
+          if (!offline)
+            Positioned(
+              top: S.md,
+              right: S.md,
+              child: widget.loading
+                  ? const StatusPill(kind: PillKind.info, label: 'Connecting…')
+                  : const StatusPill(kind: PillKind.live, label: 'Live'),
+            ),
         ],
       ),
     );

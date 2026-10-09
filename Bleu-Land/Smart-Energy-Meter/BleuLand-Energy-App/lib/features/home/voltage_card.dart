@@ -45,135 +45,142 @@ class _VoltageCardState extends State<VoltageCard> {
     final m = widget.meter;
     final r = widget.reading;
     final now = DateTime.now();
-    final live =
-        r != null &&
-        now.difference(r.ts) <= AppConfig.offlineAfter &&
-        r.volts >= 100;
+    // Nothing to show while the meter is offline: hide the whole card.
+    final reporting =
+        r != null && now.difference(r.ts) <= AppConfig.offlineAfter;
+    if (!reporting) return const SizedBox.shrink();
+    final live = r.volts >= 100; // below 100 V = no mains (e.g. bench supply)
     final v = live ? r.volts : null;
     final status = v == null
         ? null
         : voltStatus(v, min: m.voltMin, max: m.voltMax);
-    final today = r?.voltToday(now);
+    final today = r.voltToday(now);
 
-    return Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.speed_rounded, size: 18, color: C.text2),
-              const SizedBox(width: S.sm),
-              Expanded(child: Text('Voltage', style: t.titleSmall)),
-              if (status != null) _StatusChip(status: status),
-            ],
-          ),
-          const SizedBox(height: S.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (v == null)
-                Text('Offline', style: t.titleMedium?.copyWith(color: C.text2))
-              else ...[
-                TweenAnimationBuilder<double>(
-                  tween: Tween(end: v),
-                  duration: const Duration(milliseconds: 1600),
-                  curve: Curves.easeInOutCubic,
-                  builder: (_, x, _) => Text(
-                    NumberFormat('0.0').format(x),
-                    style: t.headlineMedium?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: S.md),
+      child: Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.speed_rounded, size: 18, color: C.text2),
+                const SizedBox(width: S.sm),
+                Expanded(child: Text('Voltage', style: t.titleSmall)),
+                if (status != null) _StatusChip(status: status),
+              ],
+            ),
+            const SizedBox(height: S.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (v == null)
+                  Text(
+                    'No mains voltage',
+                    style: t.titleMedium?.copyWith(color: C.text2),
+                  )
+                else ...[
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(end: v),
+                    duration: const Duration(milliseconds: 1600),
+                    curve: Curves.easeInOutCubic,
+                    builder: (_, x, _) => Text(
+                      NumberFormat('0.0').format(x),
+                      style: t.headlineMedium?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 4),
-                  child: Text(
-                    'V',
-                    style: t.titleMedium?.copyWith(color: C.text2),
-                  ),
-                ),
-              ],
-              const Spacer(),
-              InkWell(
-                borderRadius: BorderRadius.circular(R.sm),
-                onTap: widget.onEditRange,
-                child: Padding(
-                  padding: const EdgeInsets.all(S.xs),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Normal ${m.voltMin.round()}–${m.voltMax.round()} V',
-                        style: t.labelMedium?.copyWith(color: C.text2),
-                      ),
-                      if (widget.onEditRange != null) ...[
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.edit_rounded,
-                          size: 14,
-                          color: C.text3,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: S.md),
-          _VoltScale(
-            min: m.voltMin,
-            max: m.voltMax,
-            value: v,
-            dayMin: today?.min,
-            dayMax: today?.max,
-          ),
-          if (status?.advice != null) ...[
-            const SizedBox(height: S.md),
-            Container(
-              padding: const EdgeInsets.all(S.md),
-              decoration: BoxDecoration(
-                color: _color(status!).withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(R.md),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(_icon(status), size: 18, color: _color(status)),
-                  const SizedBox(width: S.sm),
-                  Expanded(
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
                     child: Text(
-                      status.advice!,
-                      style: t.bodySmall?.copyWith(color: C.text),
+                      'V',
+                      style: t.titleMedium?.copyWith(color: C.text2),
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
-          const SizedBox(height: S.md),
-          Row(
-            children: [
-              Expanded(
-                child: _DayStat(
-                  label: 'Lowest today',
-                  v: today?.min,
-                  at: today?.minAt,
-                  m: m,
+                const Spacer(),
+                InkWell(
+                  borderRadius: BorderRadius.circular(R.sm),
+                  onTap: widget.onEditRange,
+                  child: Padding(
+                    padding: const EdgeInsets.all(S.xs),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Normal ${m.voltMin.round()}–${m.voltMax.round()} V',
+                          style: t.labelMedium?.copyWith(color: C.text2),
+                        ),
+                        if (widget.onEditRange != null) ...[
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.edit_rounded,
+                            size: 14,
+                            color: C.text3,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: S.md),
-              Expanded(
-                child: _DayStat(
-                  label: 'Highest today',
-                  v: today?.max,
-                  at: today?.maxAt,
-                  m: m,
+              ],
+            ),
+            const SizedBox(height: S.md),
+            _VoltScale(
+              min: m.voltMin,
+              max: m.voltMax,
+              value: v,
+              dayMin: today?.min,
+              dayMax: today?.max,
+            ),
+            if (status?.advice != null) ...[
+              const SizedBox(height: S.md),
+              Container(
+                padding: const EdgeInsets.all(S.md),
+                decoration: BoxDecoration(
+                  color: _color(status!).withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(R.md),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(_icon(status), size: 18, color: _color(status)),
+                    const SizedBox(width: S.sm),
+                    Expanded(
+                      child: Text(
+                        status.advice!,
+                        style: t.bodySmall?.copyWith(color: C.text),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
-        ],
+            const SizedBox(height: S.md),
+            Row(
+              children: [
+                Expanded(
+                  child: _DayStat(
+                    label: 'Lowest today',
+                    v: today?.min,
+                    at: today?.minAt,
+                    m: m,
+                  ),
+                ),
+                const SizedBox(width: S.md),
+                Expanded(
+                  child: _DayStat(
+                    label: 'Highest today',
+                    v: today?.max,
+                    at: today?.maxAt,
+                    m: m,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
