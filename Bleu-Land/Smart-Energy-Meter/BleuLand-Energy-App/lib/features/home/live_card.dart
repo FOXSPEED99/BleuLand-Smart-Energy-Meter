@@ -50,7 +50,8 @@ class _LiveCardState extends State<LiveCard> {
     final offline =
         !widget.loading &&
         (r == null || now.difference(r.ts) > AppConfig.offlineAfter);
-    final known = !widget.loading && !offline;
+    if (offline) return _OfflineCard(lastSeen: r?.ts);
+    final known = !widget.loading;
     final watts = known ? r!.watts : 0.0;
 
     // ring scale: the alert threshold if set, otherwise 5 kW
@@ -78,20 +79,11 @@ class _LiveCardState extends State<LiveCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Offline: the "last seen" pill takes the title's place.
-                if (offline)
-                  StatusPill(
-                    kind: PillKind.offline,
-                    label: r == null
-                        ? 'No data yet'
-                        : 'Last seen ${fmtAgo(r.ts)}',
-                  )
-                else
-                  Text(
-                    'Using now',
-                    style: t.titleSmall?.copyWith(color: C.text2),
-                  ),
-                SizedBox(height: offline ? S.lg : S.xl),
+                Text(
+                  'Using now',
+                  style: t.titleSmall?.copyWith(color: C.text2),
+                ),
+                const SizedBox(height: S.xl),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -104,14 +96,13 @@ class _LiveCardState extends State<LiveCard> {
                             const SizedBox(height: S.sm),
                             _UsageNote(watts: watts, todayKwh: widget.todayKwh),
                           ] else ...[
-                            // Offline: no number at all, the usage is simply unknown.
                             Text(
-                              widget.loading ? 'Connecting…' : 'Offline',
+                              'Connecting…',
                               style: t.displaySmall?.copyWith(color: C.text2),
                             ),
                             const SizedBox(height: S.sm),
                             Text(
-                              widget.loading ? 'Getting the latest reading.' : 'The meter may have lost power or internet. It keeps recording and catches up when it\'s back.',
+                              'Getting the latest reading.',
                               style: t.bodySmall?.copyWith(color: C.text2),
                             ),
                           ],
@@ -142,14 +133,13 @@ class _LiveCardState extends State<LiveCard> {
             ),
           ),
           // status sits in the card's corner, clear of the ring
-          if (!offline)
-            Positioned(
-              top: S.md,
-              right: S.md,
-              child: widget.loading
-                  ? const StatusPill(kind: PillKind.info, label: 'Connecting…')
-                  : const StatusPill(kind: PillKind.live, label: 'Live'),
-            ),
+          Positioned(
+            top: S.md,
+            right: S.md,
+            child: widget.loading
+                ? const StatusPill(kind: PillKind.info, label: 'Connecting…')
+                : const StatusPill(kind: PillKind.live, label: 'Live'),
+          ),
         ],
       ),
     );
@@ -255,6 +245,174 @@ class _UsageNote extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The meter isn't reporting. Same shape as the live card, so it reads as the
+/// same card in another state: the coral pill in the corner, how long ago it
+/// was last heard as the big text, one short reason, and an empty gauge with
+/// a pulse that shows the app is still listening for it.
+class _OfflineCard extends StatefulWidget {
+  const _OfflineCard({this.lastSeen});
+  final DateTime? lastSeen;
+
+  @override
+  State<_OfflineCard> createState() => _OfflineCardState();
+}
+
+class _OfflineCardState extends State<_OfflineCard>
+    with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    const accent = C.criticalText;
+    final seen = widget.lastSeen;
+    // "4 h ago" -> big "4 h" + small "ago", like "640 W"
+    final ago = seen == null ? 'Not yet' : fmtAgo(seen);
+    final split = ago.endsWith(' ago');
+    final big = split ? ago.substring(0, ago.length - 4) : ago;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(R.xl),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF33201F), C.surface, C.surface],
+          stops: [0, 0.55, 1],
+        ),
+        border: Border.all(color: C.outline.withValues(alpha: 0.6)),
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(S.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  seen == null ? 'Meter' : 'Last seen',
+                  style: t.titleSmall?.copyWith(color: C.text2),
+                ),
+                const SizedBox(height: S.xl),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(text: big, style: t.displayLarge),
+                                  if (split)
+                                    TextSpan(
+                                      text: ' ago',
+                                      style: t.titleLarge?.copyWith(
+                                        color: C.text2,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: S.sm),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.wifi_off_rounded,
+                                size: 15,
+                                color: accent,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'No power or internet',
+                                  style: t.labelLarge?.copyWith(
+                                    color: C.text2,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: S.lg),
+                    SizedBox(
+                      width: 92,
+                      height: 92,
+                      child: CustomPaint(
+                        painter: _RingPainter(0, accent),
+                        child: AnimatedBuilder(
+                          animation: _pulse,
+                          builder: (_, child) => CustomPaint(
+                            painter: _PulsePainter(_pulse.value, accent),
+                            child: child,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.power_off_rounded,
+                              color: accent,
+                              size: 30,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Positioned(
+            top: S.md,
+            right: S.md,
+            child: StatusPill(kind: PillKind.offline, label: 'Offline'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Two rings growing out from the centre and fading, half a cycle apart.
+class _PulsePainter extends CustomPainter {
+  _PulsePainter(this.t, this.color);
+  final double t;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    const r0 = 20.0;
+    final rMax = size.shortestSide / 2 - 12; // stays inside the gauge track
+    for (final phase in [0.0, 0.5]) {
+      final p = (t + phase) % 1.0;
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = color.withValues(alpha: 0.6 * (1 - p));
+      canvas.drawCircle(c, r0 + (rMax - r0) * p, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PulsePainter o) => o.t != t;
 }
 
 class _Mini extends StatelessWidget {
