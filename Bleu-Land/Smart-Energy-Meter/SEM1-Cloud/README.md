@@ -42,6 +42,8 @@ Never put the **secret / service_role** key in the app or firmware.
 | `get_energy(p_id, from, to, 'hour'\|'day'\|'month')` | kWh per period, in the meter's local time |
 | `firmware_status(p_id)` | installed version, newest one this meter may install, update progress |
 | `request_update(p_id)` / `cancel_update(p_id)` | owner only: start an update / cancel one the meter hasn't picked up |
+| `request_wifi_setup(p_id)` | owner: ask an online meter to open Bluetooth setup to change its WiFi (handed to it once, valid 2 min) |
+| `get_setup_code(p_id)` | owner: the label code needed for Bluetooth setup (kept by `claim_device` in `private.device_setup_codes`) |
 | `watch_device(p_id)` | "I'm looking at live values": the meter uploads every 2 s for the next 45 s (the app calls it every 25 s) |
 
 **Voltage alerts:** outside the owner's range for 60 s → alert; more than 10 V outside → serious (high voltage at once, without waiting). An alert closes when the voltage is back inside with 2 V to spare, so it doesn't flap at the limit. Readings below 100 V (no mains, e.g. a bench supply) are ignored.
@@ -64,6 +66,10 @@ Source: Ministry of Energy decision of 30 Oct 2025, in force since 1 Nov 2025.
 - `pending/release_device.sql` (the owner gives a meter away) is not applied yet. The migration tool refuses statements containing `DELETE`, so paste it into **Dashboard → SQL Editor → Run** when you need it.
 
 **Updates over WiFi:** `device_push` hands the meter `{"ota": {version, url, size, md5}}` once the owner has requested an update. `device_hello` after the restart closes it: new version running → `done`; old version after `installing` → `failed` (the chip rolled back); restarted during the download → retried, 3 times at most. Meters have `fw_channel` `stable` (default) or `beta` (also sees test builds; Fox's SEM1-8B6204 is beta).
+
+## Verified (9 Oct 2026, rolled back): changing the WiFi
+
+Claim keeps the setup code; owner reads it, strangers get nothing; WiFi name stored and kept when a push doesn't send it; a request is handed to the meter exactly once; a request older than 2 minutes is ignored; strangers can't request.
 
 ## Verified (9 Oct 2026, rolled back): updates over WiFi
 
