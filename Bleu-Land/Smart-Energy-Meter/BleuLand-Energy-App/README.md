@@ -7,9 +7,9 @@ One Flutter codebase builds the **Android**, **iOS** and **web** versions. It ha
 | Screen | What it shows |
 |---|---|
 | **Welcome** | Create account · Sign in · **Try the demo** (a simulated Syrian home; no meter needed) |
-| **Home** | Live power with a usage ring; voltage, current and power factor; **this bill** in SYP with the cheap-block progress bar and an *"at this pace"* forecast; today's kWh and cost vs yesterday; power over the last 24 h |
+| **Home** | Live power with a usage ring and a usage level (light / moderate / high / very high, compared with today's average); "unknown" with the last reading when the meter is offline; voltage, current and power factor; **voltage** card (live volts on a scale with the normal range, status and advice, today's lowest/highest); **this bill** in SYP with the cheap-block progress bar and an *"at this pace"* forecast; today's kWh and cost vs yesterday; power over the last 24 h |
 | **History** | Day / Week / Month / Year charts; total, average and peak; tap a bar for its value |
-| **Alerts** | High-usage alert (slider), offline alert, and the list of past alerts |
+| **Alerts** | High-usage alert (slider), offline alert, voltage alert (normal range, editable), and the list of past alerts |
 | **Settings** | Meter info, name, **electricity price** (blocks, 1- or 2-month bills, billing day, currency), **share with family** by e-mail, add a meter, sign out |
 | **Add a meter** | Scan the QR on the label → the app sends your WiFi to the meter over Bluetooth → links it to your account → name it |
 
@@ -51,7 +51,7 @@ lib/
 test/tariff_test.dart         bill calculation tests
 ```
 
-- **Cloud:** Supabase project `bleuland-energy` (Frankfurt). See `../SEM1-Cloud/README.md`. Live values arrive by real-time subscription, about every 10 s.
+- **Cloud:** Supabase project `bleuland-energy` (Frankfurt). See `../SEM1-Cloud/README.md`. Live values arrive by real-time subscription: every 2 s while Home is on screen (the app tells the cloud it's watching every 25 s), otherwise every 10 s. Numbers glide between readings.
 - **Bluetooth setup:** `esp_provisioning_ble` (Espressif's protocol, MIT licence) over `universal_ble` (BSD licence, free for companies).
   - `flutter_blue_plus` was **not** used: it needs a paid licence for companies.
 - **Charts:** `fl_chart`. Colours were checked with a colour-blindness and contrast validator:

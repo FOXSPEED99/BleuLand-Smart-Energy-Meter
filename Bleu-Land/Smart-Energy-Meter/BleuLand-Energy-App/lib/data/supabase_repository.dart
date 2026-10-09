@@ -42,10 +42,13 @@ class SupabaseRepository implements EnergyRepository {
         billingDay: (d['billing_day'] as num?)?.toInt() ?? 1,
         alertPowerW: (d['alert_power_w'] as num?)?.toInt(),
         alertOfflineMin: (d['alert_offline_min'] as num?)?.toInt() ?? 15,
+        voltMin: (d['volt_min'] as num?)?.toDouble() ?? 200,
+        voltMax: (d['volt_max'] as num?)?.toDouble() ?? 230,
       );
 
   static DateTime? _ts(dynamic v) => v == null ? null : DateTime.parse(v as String).toLocal();
   static double _d(dynamic v) => (v as num?)?.toDouble() ?? 0;
+  static double? _dn(dynamic v) => (v as num?)?.toDouble();
 
   LiveReading _liveFrom(Map<String, dynamic> r) => LiveReading(
         ts: _ts(r['ts'])!,
@@ -55,6 +58,11 @@ class SupabaseRepository implements EnergyRepository {
         pf: _d(r['pf']),
         kwhTotal: _d(r['kwh']),
         rssi: (r['rssi'] as num?)?.toInt(),
+        day: r['day'] == null ? null : DateTime.parse(r['day'] as String),
+        dayVmin: _dn(r['day_vmin']),
+        dayVminAt: _ts(r['day_vmin_at']),
+        dayVmax: _dn(r['day_vmax']),
+        dayVmaxAt: _ts(r['day_vmax_at']),
       );
 
   /// Current row, then every change pushed by the cloud (about every 10 s).
@@ -91,6 +99,15 @@ class SupabaseRepository implements EnergyRepository {
   }
 
   @override
+  Future<void> watch(String meterId) async {
+    try {
+      await _db.rpc('watch_device', params: {'p_id': meterId});
+    } catch (_) {
+      // only makes updates faster; the normal 10 s updates keep working
+    }
+  }
+
+  @override
   Future<List<EnergyPoint>> energy(String meterId, DateTime from, DateTime to, Bucket bucket) async {
     final rows = await _db.rpc('get_energy', params: {
       'p_id': meterId,
@@ -124,8 +141,14 @@ class SupabaseRepository implements EnergyRepository {
       for (final r in rows)
         AlertItem(
           id: (r['id'] as num).toInt(),
-          kind: r['kind'] == 'offline' ? AlertKind.offline : AlertKind.highPower,
+          kind: switch (r['kind']) {
+            'offline' => AlertKind.offline,
+            'volt_low' => AlertKind.voltLow,
+            'volt_high' => AlertKind.voltHigh,
+            _ => AlertKind.highPower,
+          },
           value: (r['value'] as num?)?.toDouble(),
+          severity: (r['severity'] as num?)?.toInt() ?? 1,
           createdAt: _ts(r['created_at'])!,
           resolvedAt: _ts(r['resolved_at']),
         ),
@@ -141,6 +164,8 @@ class SupabaseRepository implements EnergyRepository {
       'billing_day': m.billingDay,
       'alert_power_w': m.alertPowerW,
       'alert_offline_min': m.alertOfflineMin,
+      'volt_min': m.voltMin,
+      'volt_max': m.voltMax,
     }).eq('id', m.id);
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,7 @@ import '../../widgets/charts.dart';
 import '../../widgets/ui.dart';
 import 'bill_card.dart';
 import 'live_card.dart';
+import 'voltage_card.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -36,12 +39,82 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _Dashboard extends ConsumerWidget {
+class _Dashboard extends ConsumerStatefulWidget {
   const _Dashboard({required this.meter});
   final Meter meter;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_Dashboard> createState() => _DashboardState();
+}
+
+/// While Home is on screen and the app is in the foreground, tell the cloud
+/// every 25 s that someone is watching: the meter then reports every 2 s.
+class _DashboardState extends ConsumerState<_Dashboard> with WidgetsBindingObserver {
+  Timer? _beat;
+  bool _foreground = true;
+  bool _visible = true;
+
+  Meter get meter => widget.meter;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // other bottom tabs keep Home alive but switch its tickers off
+    _visible = TickerMode.valuesOf(context).enabled;
+    _updateBeat();
+  }
+
+  @override
+  void didUpdateWidget(_Dashboard old) {
+    super.didUpdateWidget(old);
+    if (old.meter.id != meter.id) {
+      _beat?.cancel();
+      _beat = null;
+      _updateBeat();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    _foreground = s == AppLifecycleState.resumed;
+    _updateBeat();
+  }
+
+  void _updateBeat() {
+    final want = _visible && _foreground;
+    if (want && _beat == null) {
+      _ping();
+      _beat = Timer.periodic(const Duration(seconds: 25), (_) => _ping());
+    } else if (!want && _beat != null) {
+      _beat!.cancel();
+      _beat = null;
+    }
+  }
+
+  void _ping() => ref.read(repositoryProvider).watch(meter.id);
+
+  @override
+  void dispose() {
+    _beat?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _editRange() async {
+    final r = await showVoltageRangeSheet(context, meter);
+    if (r == null) return;
+    await ref.read(repositoryProvider).updateMeter(meter.copyWith(voltMin: r.$1, voltMax: r.$2));
+    ref.invalidate(metersProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final live = ref.watch(liveProvider(meter.id));
     final cycle = ref.watch(cycleProvider(meter.id));
@@ -61,7 +134,14 @@ class _Dashboard extends ConsumerWidget {
         children: [
           _Header(meter: meter, demo: demo),
           const SizedBox(height: S.lg),
-          LiveCard(reading: live.value, meter: meter, loading: live.isLoading),
+          LiveCard(
+            reading: live.value,
+            meter: meter,
+            loading: live.isLoading && !live.hasValue,
+            todayKwh: cycle.value?.todayKwh,
+          ),
+          const SizedBox(height: S.md),
+          VoltageCard(reading: live.value, meter: meter, onEditRange: meter.isOwner ? _editRange : null),
           const SizedBox(height: S.md),
           cycle.when(
             loading: () => const LoadingPanel(height: 220),

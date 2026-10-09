@@ -7,6 +7,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
+import '../home/voltage_card.dart';
 
 class AlertsScreen extends ConsumerWidget {
   const AlertsScreen({super.key});
@@ -66,6 +67,16 @@ class _AlertTile extends StatelessWidget {
     final (icon, color, title) = switch (a.kind) {
       AlertKind.highPower => (Icons.bolt_rounded, C.warning, 'High usage · ${fmtPowerText(a.value ?? 0)}'),
       AlertKind.offline => (Icons.power_off_rounded, C.criticalText, 'Meter offline'),
+      AlertKind.voltLow => (
+          Icons.south_rounded,
+          a.severity >= 2 ? C.criticalText : C.warning,
+          '${a.severity >= 2 ? 'Very low' : 'Low'} voltage · ${fmtVolts(a.value ?? 0)}',
+        ),
+      AlertKind.voltHigh => (
+          Icons.north_rounded,
+          a.severity >= 2 ? C.criticalText : C.warning,
+          '${a.severity >= 2 ? 'Very high' : 'High'} voltage · ${fmtVolts(a.value ?? 0)}',
+        ),
     };
     final when = DateFormat('EEE d MMM, HH:mm').format(a.createdAt);
     final dur = a.resolvedAt?.difference(a.createdAt);
@@ -145,6 +156,29 @@ class _AlertSettings extends ConsumerWidget {
         const SizedBox(height: S.xs),
         Text(
           'Shows when the meter stops reporting: usually a power cut, or the home internet is down.',
+          style: t.bodySmall?.copyWith(color: C.text2),
+        ),
+        const SizedBox(height: S.md),
+        const Divider(),
+        const SizedBox(height: S.md),
+        Row(children: [
+          const Icon(Icons.speed_rounded, color: C.warning, size: 20),
+          const SizedBox(width: S.sm),
+          Expanded(child: Text('Voltage alert', style: t.titleSmall)),
+          if (meter.isOwner)
+            TextButton(
+              onPressed: () async {
+                final r = await showVoltageRangeSheet(context, meter);
+                if (r != null) await save(meter.copyWith(voltMin: r.$1, voltMax: r.$2));
+              },
+              child: Text('${meter.voltMin.round()}–${meter.voltMax.round()} V'),
+            )
+          else
+            Text('${meter.voltMin.round()}–${meter.voltMax.round()} V', style: t.labelMedium?.copyWith(color: C.text2)),
+        ]),
+        Text(
+          'Warns when the mains voltage stays outside the normal range for a minute. '
+          'A serious warning when it is more than 10 V outside; very high voltage is reported at once.',
           style: t.bodySmall?.copyWith(color: C.text2),
         ),
       ]),
