@@ -46,6 +46,11 @@ SemaphoreHandle_t logMtx;  // the main loop writes the log, the cloud task reads
 bool logOk = false;
 uint32_t uploadedSeqVal = 0;
 
+// Lowest/highest 1-s voltage since the cloud last asked (for low/high voltage
+// alerts: a 10 s upload alone would miss short dips).
+float vRangeMin = 0, vRangeMax = 0;
+bool vRangeHave = false;
+
 volatile TimeSource timeSrc = TimeSource::None;
 volatile bool ntpSynced = false;
 
@@ -88,6 +93,11 @@ void meterTask(void*) {
         interval.add(r);
         interval.flags |= meter.takeFlags();  // same bit values as LogFlags
         pulses = meter.takeWhPulses();
+        if (r.samples && r.v >= 100) {  // below 100 V = no mains (bench supply)
+          if (!vRangeHave || r.v < vRangeMin) vRangeMin = r.v;
+          if (!vRangeHave || r.v > vRangeMax) vRangeMax = r.v;
+          vRangeHave = true;
+        }
       }
     }
     if (pulses) leds::addEnergyPulses(pulses);
@@ -263,6 +273,15 @@ LiveSnapshot snapshot() {
   s.haveRaw = hlw.hasPacket();
   memcpy(s.raw, hlw.lastPacket(), sizeof(s.raw));
   return s;
+}
+
+bool takeVoltRange(float& vMin, float& vMax) {
+  Lock l;
+  if (!vRangeHave) return false;
+  vMin = vRangeMin;
+  vMax = vRangeMax;
+  vRangeHave = false;
+  return true;
 }
 
 time_t now() {

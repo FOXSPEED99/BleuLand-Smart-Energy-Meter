@@ -30,7 +30,7 @@ The firmware picks the right pins and CT values from the board you select; you d
 - **Metering in its own high-priority task.** Network work can never make it miss packets. A watchdog restarts the meter if it ever hangs.
 
 - **Cloud link (stage 2).**
-  - Once online, the meter registers with the BleuLand Energy cloud (Supabase, Frankfurt) and sends live values every 10 s over HTTPS.
+  - Once online, the meter registers with the BleuLand Energy cloud (Supabase, Frankfurt) and sends live values every 10 s over HTTPS, or every 2 s while someone has the app open. Each upload also carries the lowest and highest 1-second voltage since the previous one, so short dips and spikes are caught.
   - It then uploads the 5-minute history it stored while offline, oldest first, until it has caught up.
   - It only trusts the cloud's real certificates; the list is in `cloud_certs.h`.
   - The cloud work runs in its own background task, so a slow connection never freezes anything else.

@@ -15,6 +15,7 @@ namespace {
 volatile CloudState st = CloudState::Off;
 volatile bool isClaimed = false;
 volatile uint32_t lastOk = 0;
+volatile bool fastLive = false;  // the cloud says someone is watching live
 String lastErr;  // written by the cloud task only
 SemaphoreHandle_t errMtx;
 
@@ -94,6 +95,11 @@ bool push(bool* more) {
     live["pf"] = serialized(String(l.reading.pf, 3));
     live["kwh"] = serialized(String(l.totalWh / 1000.0, 4));
     live["rssi"] = net::rssi();
+    float vMin, vMax;
+    if (app::takeVoltRange(vMin, vMax)) {
+      live["vmin"] = serialized(String(vMin, 1));
+      live["vmax"] = serialized(String(vMax, 1));
+    }
   } else {
     body["p_live"] = nullptr;
   }
@@ -131,6 +137,9 @@ bool push(bool* more) {
     setError(e == "auth" ? CloudState::AuthError : CloudState::Error, "upload rejected: " + e);
     return false;
   }
+  bool fast = res["fast"] | false;
+  if (fast != fastLive) Serial.printf("[cloud] live updates every %u s\n", (unsigned)(fast ? CLOUD_FAST_S : CLOUD_LIVE_S));
+  fastLive = fast;
   // Records that were skipped while reading (damaged slots) count as sent too.
   if (n) app::setUploadedSeq(resume - 1);
   else if (resume > app::uploadedSeq() + 1) app::setUploadedSeq(resume - 1);
@@ -164,7 +173,7 @@ void cloudTask(void*) {
       st = CloudState::Ok;
       lastOk = (uint32_t)app::now();
       backoffS = 5;
-      if (registered && !more) vTaskDelay(pdMS_TO_TICKS(CLOUD_LIVE_S * 1000));
+      if (registered && !more) vTaskDelay(pdMS_TO_TICKS((fastLive ? CLOUD_FAST_S : CLOUD_LIVE_S) * 1000));
       else vTaskDelay(pdMS_TO_TICKS(200));  // still catching up on history
     } else {
       tls.stop();

@@ -5,7 +5,7 @@
 #include "board.h"
 
 #ifndef SEM1_FW_VERSION
-#define SEM1_FW_VERSION "0.1.0"
+#define SEM1_FW_VERSION "0.2.0"
 #endif
 
 // ---------- current transformer + burden (R14) ----------
@@ -43,5 +43,6 @@ constexpr uint32_t MIN_VALID_UNIX = 1704067200;
 #define CLOUD_URL "https://rmgzpxwpowwzqewmiyaw.supabase.co"
 #define CLOUD_KEY "sb_publishable_2_MDRTqxogkVNA97djRs3Q_J3PrFZ7_"
 constexpr uint32_t CLOUD_LIVE_S = 10;          // live values every 10 s
+constexpr uint32_t CLOUD_FAST_S = 2;           // ... every 2 s while someone has the app open
 constexpr size_t CLOUD_BATCH = 48;             // history records per upload (4 h)
 constexpr uint32_t CLOUD_RETRY_MAX_S = 300;    // back-off limit when the cloud is down
