@@ -287,7 +287,7 @@ class _OfflineCardState extends State<_OfflineCard>
         ),
         border: Border.all(color: C.outline.withValues(alpha: 0.6)),
       ),
-      padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.lg, S.xl),
+      padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.lg, S.xxl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -302,7 +302,7 @@ class _OfflineCardState extends State<_OfflineCard>
               const StatusPill(kind: PillKind.offline, label: 'Offline'),
             ],
           ),
-          const SizedBox(height: S.lg),
+          const SizedBox(height: S.xl),
           Row(
             children: [
               Expanded(
@@ -318,7 +318,7 @@ class _OfflineCardState extends State<_OfflineCard>
                     const SizedBox(height: S.xs),
                     Text(
                       'Power or internet may be down.',
-                      style: t.bodyMedium?.copyWith(color: C.text2),
+                      style: t.bodySmall?.copyWith(color: C.text2),
                     ),
                   ],
                 ),
