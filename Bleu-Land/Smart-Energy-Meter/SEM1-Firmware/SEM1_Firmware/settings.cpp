@@ -87,6 +87,42 @@ bool wifiFromSetup() {
   return v;
 }
 
+void requestSetupWindow(uint8_t why) {
+  prefs.begin(NS, false);
+  prefs.putUChar("wsetup", why);
+  prefs.end();
+}
+
+uint8_t takeSetupWindow() {
+  prefs.begin(NS, false);
+  uint8_t v = prefs.getUChar("wsetup", 0);
+  if (v) prefs.remove("wsetup");
+  prefs.end();
+  return v;
+}
+
+void saveWifiBackup(const String& ssid, const String& pass) {
+  prefs.begin(NS, false);
+  prefs.putString("wbs", ssid);
+  prefs.putString("wbp", pass);
+  prefs.end();
+}
+
+bool loadWifiBackup(String& ssid, String& pass) {
+  prefs.begin(NS, true);
+  ssid = prefs.getString("wbs", "");
+  pass = prefs.getString("wbp", "");
+  prefs.end();
+  return ssid.length() > 0;
+}
+
+void clearWifiBackup() {
+  prefs.begin(NS, false);
+  prefs.remove("wbs");
+  prefs.remove("wbp");
+  prefs.end();
+}
+
 void setWifiFromSetup(bool v) {
   prefs.begin(NS, false);
   prefs.putBool("wifiok", v);

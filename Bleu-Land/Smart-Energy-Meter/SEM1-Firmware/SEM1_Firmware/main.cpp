@@ -232,8 +232,8 @@ void buttonLoop() {
       settings::factoryReset();
       net::forgetWifiAndRestart();
     } else if (held >= BUTTON_WIFI_RESET_MS) {
-      Serial.println("[button] WiFi reset");
-      net::forgetWifiAndRestart();
+      Serial.println("[button] WiFi setup");
+      net::openSetupWindow();
     }
   }
   if (pressedAt) {

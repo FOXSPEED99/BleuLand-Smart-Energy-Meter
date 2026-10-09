@@ -103,6 +103,7 @@ bool push(bool* more) {
     live["pf"] = serialized(String(l.reading.pf, 3));
     live["kwh"] = serialized(String(l.totalWh / 1000.0, 4));
     live["rssi"] = net::rssi();
+    live["ssid"] = net::ssid();
     float vMin, vMax;
     if (app::takeVoltRange(vMin, vMax)) {
       live["vmin"] = serialized(String(vMin, 1));
@@ -154,6 +155,10 @@ bool push(bool* more) {
       pendingOta.md5 = o["md5"] | "";
       pendingOta.size = o["size"] | 0;
     }
+  }
+  if (res["wifi_setup"] | false) {
+    Serial.println("[cloud] the app asked to change the WiFi");
+    net::openSetupWindow();  // restarts
   }
   bool fast = res["fast"] | false;
   if (fast != fastLive) Serial.printf("[cloud] live updates every %u s\n", (unsigned)(fast ? CLOUD_FAST_S : CLOUD_LIVE_S));

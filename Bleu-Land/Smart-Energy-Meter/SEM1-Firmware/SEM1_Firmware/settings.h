@@ -30,6 +30,17 @@ void saveClaimCode(const String& code);
 bool wifiFromSetup();
 void setWifiFromSetup(bool v);
 
+// "Open WiFi setup at the next boot": 1 = someone asked (button, app),
+// 2 = automatic (the saved WiFi has been unreachable for a while).
+void requestSetupWindow(uint8_t why);
+uint8_t takeSetupWindow();  // reads and clears the request (0 = none)
+
+// The working WiFi, kept while a setup window runs, so it can be put back if
+// nobody sets up a new one (or the power fails in the middle).
+void saveWifiBackup(const String& ssid, const String& pass);
+bool loadWifiBackup(String& ssid, String& pass);
+void clearWifiBackup();
+
 // Fallback energy storage when the board has no working RTC.
 uint64_t loadEnergyMilliWh();
 void saveEnergyMilliWh(uint64_t mwh);

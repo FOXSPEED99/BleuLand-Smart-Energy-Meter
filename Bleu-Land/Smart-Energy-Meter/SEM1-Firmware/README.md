@@ -24,7 +24,7 @@ The firmware picks the right pins and CT values from the board you select; you d
   - **ENERGY** (white): one flash per Wh, i.e. 1000 imp/kWh.
   - **WiFi** (blue): link / setup status.
 - **Button:**
-  - hold 5 s = forget WiFi and go back to phone setup;
+  - hold 5 s = open phone setup to change the WiFi (the current WiFi is kept until a new one works);
   - hold 15 s = also forget the owner.
 - **Local web page and JSON API** on your home network, for the app, Home Assistant, and calibration on the bench.
 - **Metering in its own high-priority task.** Network work can never make it miss packets. A watchdog restarts the meter if it ever hangs.
@@ -36,6 +36,11 @@ The firmware picks the right pins and CT values from the board you select; you d
   - The cloud work runs in its own background task, so a slow connection never freezes anything else.
   - Status shows on the web page, in `info`, and on the blue LED.
 
+- **Changing the WiFi (from 0.4.0).** Three ways into phone setup, all keeping the current WiFi as a backup that comes back if no new one is set up in time:
+  - the app (**Settings → WiFi → Change WiFi network**) while the meter is online: the cloud tells it to restart into setup (10 minutes);
+  - automatically, after **2 minutes without its WiFi** (password changed, new router): setup opens for 4 minutes, then it tries the old WiFi again, and so on;
+  - holding the button 5 s (10 minutes).
+  A power cut in the middle of setup is safe too: the old WiFi is put back at the next start.
 - **Updates over WiFi (from 0.3.0).** The owner taps *Update* in the app; see below.
 
 Coming next:
@@ -140,7 +145,7 @@ The QR payload is fixed for each unit; it's created on the unit's first boot. In
 
 **The app finds nothing?**
 - Check that the blue LED blinks **slowly** and the serial monitor shows `[net] setup mode: BLE name SEM1_...`.
-- If it says `connecting to saved WiFi` instead, the meter already has a network saved: type `wifi-reset` (or hold BOOT 5 s) to start setup again.
+- If it says `connecting to saved WiFi` instead, the meter already has a network saved: type `wifi-setup` (or hold the button 5 s) to set up a different one.
 - WiFi details left behind by other firmware, such as the test sketch, are ignored automatically.
 - On Android, Bluetooth **and** Location must be on to scan.
 
@@ -152,7 +157,7 @@ The QR payload is fixed for each unit; it's created on the unit's first boot. In
 | fast blink | connecting to the home WiFi |
 | on | connected |
 | on, with a short off-blink every 2 s | on WiFi, but the cloud can't be reached |
-| very fast flicker | button held ≥ 5 s: release now to reset WiFi |
+| very fast flicker | button held ≥ 5 s: release now to open WiFi setup |
 | on + ENERGY on | button held ≥ 15 s: release now for a factory reset |
 
 ENERGY LED (white): one short flash per watt-hour (1000 imp/kWh), like a utility meter.
@@ -182,6 +187,7 @@ energy int|pf         energy from P x dt (default) or the PF pulse counter
 time <unix>           set the clock by hand (UTC)
 log [n]               last n history records
 ota                   firmware slots and update state
+wifi-setup            phone setup for a new WiFi (keeps the current one until it works)
 wifi-reset            forget WiFi, restart into phone setup
 factory-reset         also forget the owner
 reboot

@@ -75,6 +75,7 @@ void run(String cmd) {
         "time <unix>           set the clock by hand (UTC)\n"
         "log [n]               last n history records\n"
         "ota                   firmware slots and update state\n"
+        "wifi-setup            phone setup for a new WiFi (keeps the current one until it works)\n"
         "wifi-reset            forget WiFi, restart into phone setup\n"
         "factory-reset         also forget the owner\n"
         "reboot");
@@ -108,6 +109,8 @@ void run(String cmd) {
     }
   } else if (word == "log") {
     printLog(arg.length() ? arg.toInt() : 8);
+  } else if (word == "wifi-setup") {
+    net::openSetupWindow();
   } else if (word == "wifi-reset") {
     net::forgetWifiAndRestart();
   } else if (word == "factory-reset") {
