@@ -7,7 +7,6 @@ import '../../core/config.dart';
 import '../../core/levels.dart';
 import '../../data/models.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/ui.dart';
 
 /// Mains voltage: live value on a scale with the home's normal range, a
 /// plain-words status. The range itself is changed in Settings.
@@ -50,7 +49,18 @@ class _VoltageCardState extends State<VoltageCard> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: S.md),
-      child: Panel(
+      child: Container(
+        // a soft blue wash, like the live card's green one
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(R.lg),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF152A3C), C.surface, C.surface],
+            stops: [0, 0.55, 1],
+          ),
+        ),
+        padding: const EdgeInsets.all(S.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -112,10 +122,16 @@ class _VoltageCardState extends State<VoltageCard> {
                   children: [
                     Icon(_icon(status), size: 18, color: _color(status)),
                     const SizedBox(width: S.sm),
+                    // always one line; shrinks a little on very narrow phones
                     Expanded(
-                      child: Text(
-                        status.advice!,
-                        style: t.bodySmall?.copyWith(color: C.text),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          status.advice!,
+                          maxLines: 1,
+                          style: t.bodySmall?.copyWith(color: C.text),
+                        ),
                       ),
                     ),
                   ],
@@ -184,7 +200,7 @@ class _VoltScale extends StatelessWidget {
   final double min, max;
   final double? value;
 
-  static const _bar = 12.0, _dot = 22.0;
+  static const _bar = 12.0, _dot = 26.0; // _dot: height of the needle area
 
   @override
   Widget build(BuildContext context) {
@@ -234,20 +250,21 @@ class _VoltScale extends StatelessWidget {
                   tween: Tween(end: x(v)),
                   duration: const Duration(milliseconds: 1600),
                   curve: Curves.easeInOutCubic,
+                  // a slim white needle standing across the bar
                   builder: (_, px, _) => Positioned(
-                    left: (px - _dot / 2).clamp(0.0, box.maxWidth - _dot),
+                    left: (px - 4).clamp(0.0, box.maxWidth - 8),
                     top: 0,
                     child: Container(
-                      width: _dot,
+                      width: 8,
                       height: _dot,
                       decoration: BoxDecoration(
                         color: C.text,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: C.surface, width: 4),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: C.surface, width: 2),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.35),
-                            blurRadius: 6,
+                            color: Colors.black.withValues(alpha: 0.4),
+                            blurRadius: 4,
                           ),
                         ],
                       ),

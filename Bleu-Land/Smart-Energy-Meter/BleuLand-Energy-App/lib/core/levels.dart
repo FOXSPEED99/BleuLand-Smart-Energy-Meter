@@ -69,15 +69,13 @@ extension VoltStatusText on VoltStatus {
         VoltStatus.highSerious => 'Too high',
       };
 
-  /// What it means for the home. Null when everything is fine.
+  /// What it means for the home, in one short line (the chip already says
+  /// how low or high). Null when everything is fine.
   String? get advice => switch (this) {
         VoltStatus.normal => null,
-        VoltStatus.lowMild =>
-          'Slightly low. Most things work, but motors such as the fridge, AC and water pump run hotter.',
-        VoltStatus.lowSerious =>
-          'Very low. This can damage fridges, AC and pumps. Switch them off or use a voltage protector until it recovers.',
-        VoltStatus.highMild => 'Slightly high. Lamps and electronics wear out faster.',
-        VoltStatus.highSerious =>
-          'Dangerously high. Unplug sensitive electronics or use a voltage protector until it is back to normal.',
+        VoltStatus.lowMild => 'Motors like the fridge and AC run hotter.',
+        VoltStatus.lowSerious => 'Can damage fridge and AC. Switch them off.',
+        VoltStatus.highMild => 'Lamps and electronics wear out faster.',
+        VoltStatus.highSerious => 'Can damage electronics. Unplug them now.',
       };
 }
