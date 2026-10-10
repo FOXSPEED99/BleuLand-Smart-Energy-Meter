@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
 import '../../data/models.dart';
@@ -7,7 +6,7 @@ import '../../data/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
 
-/// "This bill": cost so far, the cheap-block meter, and where the bill is heading.
+/// "This bill": energy used and cost so far side by side, and the cheap-block meter.
 class BillCard extends StatelessWidget {
   const BillCard({super.key, required this.meter, required this.cycle, this.onEditTariff});
   final Meter meter;
@@ -18,7 +17,6 @@ class BillCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final cur = meter.currency;
-    final df = DateFormat('d MMM');
     final tiers = meter.tariff.tiers;
     final firstLimit = tiers.isNotEmpty ? tiers.first.uptoKwh : null;
     final daysLeft = cycle.period.end.difference(DateTime.now()).inDays;
@@ -35,6 +33,23 @@ class BillCard extends StatelessWidget {
       );
     }
 
+    final left = daysLeft < 0 ? 0 : daysLeft;
+    // one stat: small label, big number, unit; shrinks rather than wraps
+    Widget stat(String label, String value, String unit) => Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: t.labelMedium?.copyWith(color: C.text3)),
+            const SizedBox(height: S.xs),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text.rich(TextSpan(children: [
+                TextSpan(text: value, style: t.displaySmall),
+                TextSpan(text: ' $unit', style: t.titleMedium?.copyWith(color: C.text2)),
+              ])),
+            ),
+          ]),
+        );
+
     return Panel(
       padding: const EdgeInsets.all(S.xl),
       onTap: onEditTariff,
@@ -42,53 +57,27 @@ class BillCard extends StatelessWidget {
         Row(children: [
           Text('This bill', style: t.titleSmall?.copyWith(color: C.text2)),
           const Spacer(),
-          Text(
-            '${df.format(cycle.period.start)} – ${df.format(cycle.period.end.subtract(const Duration(days: 1)))}',
-            style: t.labelMedium?.copyWith(color: C.text3),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(99)),
+            child: Text(left == 1 ? '1 day left' : '$left days left', style: t.labelSmall?.copyWith(color: C.text2)),
           ),
         ]),
-        const SizedBox(height: S.sm),
-        Text.rich(TextSpan(children: [
-          TextSpan(text: fmtMoney(cycle.cost, '').trim(), style: t.displaySmall),
-          TextSpan(text: ' $cur', style: t.titleMedium?.copyWith(color: C.text2)),
-        ])),
-        const SizedBox(height: 2),
-        Text('${fmtKwh(cycle.kwh)} so far · $daysLeft days left', style: t.bodySmall?.copyWith(color: C.text2)),
+        const SizedBox(height: S.lg),
+        // energy and cost side by side, equal weight
+        IntrinsicHeight(
+          child: Row(children: [
+            stat('Used', fmtKwh(cycle.kwh, unit: false), 'kWh'),
+            Container(width: 1, color: C.outline, margin: const EdgeInsets.symmetric(horizontal: S.lg)),
+            stat('Cost', fmtMoney(cycle.cost, '').trim(), cur),
+          ]),
+        ),
         if (firstLimit != null) ...[
           const SizedBox(height: S.lg),
-          TierMeter(used: cycle.kwh, limit: firstLimit, projected: cycle.projectedKwh),
+          TierMeter(used: cycle.kwh, limit: firstLimit),
           const SizedBox(height: S.sm),
           _TierLegend(cycle: cycle, meter: meter, limit: firstLimit),
         ],
-        const SizedBox(height: S.lg),
-        Container(
-          padding: const EdgeInsets.all(S.md),
-          decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(R.md)),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.trending_up_rounded, size: 20, color: C.text2),
-            const SizedBox(width: S.sm),
-            Expanded(
-              child: Text.rich(
-                TextSpan(style: t.bodySmall?.copyWith(color: C.text2), children: [
-                  const TextSpan(text: 'At this pace: '),
-                  TextSpan(
-                    text: '~${fmtKwh(cycle.projectedKwh)} · ${fmtMoney(cycle.projectedCost, cur)}',
-                    style: const TextStyle(color: C.text, fontWeight: FontWeight.w600),
-                  ),
-                  const TextSpan(text: ' by the end of this bill.'),
-                  if (cycle.tierCrossDate != null && cycle.tierCrossDate!.isBefore(cycle.period.end)) ...[
-                    const TextSpan(text: ' The cheap block runs out around '),
-                    TextSpan(
-                      text: DateFormat('d MMM').format(cycle.tierCrossDate!),
-                      style: const TextStyle(color: C.text, fontWeight: FontWeight.w600),
-                    ),
-                    const TextSpan(text: '.'),
-                  ],
-                ]),
-              ),
-            ),
-          ]),
-        ),
       ]),
     );
   }
