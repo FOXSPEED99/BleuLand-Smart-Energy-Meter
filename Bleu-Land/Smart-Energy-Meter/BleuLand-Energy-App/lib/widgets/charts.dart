@@ -475,7 +475,7 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
     final top =
         withData.map((i) => max(slots[i].w!, slots[i].shown!)).reduce(max) /
         1000;
-    final axis = niceAxis(top * 1.25); // room above the line for the bubble
+    final axis = niceAxis(top * 1.5); // room above the line for the bubble
     final mark = picked ?? peak; // where the bubble sits
     final bar = LineChartBarData(
       spots: [
