@@ -35,6 +35,12 @@ void main() {
       expect(s(200), VoltStatus.normal);
       expect(s(215), VoltStatus.normal);
       expect(s(230), VoltStatus.normal);
+      // within 3 V of a limit is still normal
+      expect(s(230.1), VoltStatus.normal);
+      expect(s(233), VoltStatus.normal);
+      expect(s(197), VoltStatus.normal);
+      expect(s(196.9), VoltStatus.lowMild);
+      expect(s(233.1), VoltStatus.highMild);
     });
 
     test('a little outside is mild', () {

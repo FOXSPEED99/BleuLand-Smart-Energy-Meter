@@ -109,15 +109,6 @@ class _DashboardState extends ConsumerState<_Dashboard>
     super.dispose();
   }
 
-  Future<void> _editRange() async {
-    final r = await showVoltageRangeSheet(context, meter);
-    if (r == null) return;
-    await ref
-        .read(repositoryProvider)
-        .updateMeter(meter.copyWith(voltMin: r.$1, voltMax: r.$2));
-    ref.invalidate(metersProvider);
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
@@ -143,15 +134,10 @@ class _DashboardState extends ConsumerState<_Dashboard>
             reading: live.value,
             meter: meter,
             loading: live.isLoading && !live.hasValue,
-            todayKwh: cycle.value?.todayKwh,
           ),
           const SizedBox(height: S.md),
           // hides itself while the meter is offline (and adds its own spacing)
-          VoltageCard(
-            reading: live.value,
-            meter: meter,
-            onEditRange: meter.isOwner ? _editRange : null,
-          ),
+          VoltageCard(reading: live.value, meter: meter),
           cycle.when(
             loading: () => const LoadingPanel(height: 220),
             error: (e, _) => ErrorPanel(

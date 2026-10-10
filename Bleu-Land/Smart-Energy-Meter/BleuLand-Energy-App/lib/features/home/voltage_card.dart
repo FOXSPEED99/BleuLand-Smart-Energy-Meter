@@ -11,17 +11,12 @@ import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
 
 /// Mains voltage: live value on a scale with the home's normal range, a
-/// plain-words status, and today's lowest and highest.
+/// plain-words status, and today's lowest and highest. The range itself is
+/// changed in Settings.
 class VoltageCard extends StatefulWidget {
-  const VoltageCard({
-    super.key,
-    required this.reading,
-    required this.meter,
-    this.onEditRange,
-  });
+  const VoltageCard({super.key, required this.reading, required this.meter});
   final LiveReading? reading;
   final Meter meter;
-  final VoidCallback? onEditRange; // owner only
 
   @override
   State<VoltageCard> createState() => _VoltageCardState();
@@ -100,40 +95,17 @@ class _VoltageCardState extends State<VoltageCard> {
                   ),
                 ],
                 const Spacer(),
-                InkWell(
-                  borderRadius: BorderRadius.circular(R.sm),
-                  onTap: widget.onEditRange,
-                  child: Padding(
-                    padding: const EdgeInsets.all(S.xs),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Normal ${m.voltMin.round()}–${m.voltMax.round()} V',
-                          style: t.labelMedium?.copyWith(color: C.text2),
-                        ),
-                        if (widget.onEditRange != null) ...[
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.edit_rounded,
-                            size: 14,
-                            color: C.text3,
-                          ),
-                        ],
-                      ],
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: S.xs),
+                  child: Text(
+                    'Normal ${m.voltMin.round()}–${m.voltMax.round()} V',
+                    style: t.labelMedium?.copyWith(color: C.text2),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: S.md),
-            _VoltScale(
-              min: m.voltMin,
-              max: m.voltMax,
-              value: v,
-              dayMin: today?.min,
-              dayMax: today?.max,
-            ),
+            _VoltScale(min: m.voltMin, max: m.voltMax, value: v),
             if (status?.advice != null) ...[
               const SizedBox(height: S.md),
               Container(
@@ -168,7 +140,6 @@ class _VoltageCardState extends State<VoltageCard> {
                     m: m,
                   ),
                 ),
-                const SizedBox(width: S.md),
                 Expanded(
                   child: _DayStat(
                     label: 'Highest today',
@@ -253,11 +224,11 @@ class _DayStat extends StatelessWidget {
         ? null
         : voltStatus(value, min: m.voltMin, max: m.voltMax);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: t.labelSmall?.copyWith(color: C.text3)),
         const SizedBox(height: 2),
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(value == null ? '–' : fmtVolts(value), style: t.titleSmall),
             if (s != null && s != VoltStatus.normal) ...[
@@ -279,17 +250,11 @@ class _DayStat extends StatelessWidget {
 }
 
 /// A horizontal scale: serious | a little low | normal | a little high | serious,
-/// with today's lowest/highest as ticks and the live value as a dot.
+/// with the live value as a dot.
 class _VoltScale extends StatelessWidget {
-  const _VoltScale({
-    required this.min,
-    required this.max,
-    this.value,
-    this.dayMin,
-    this.dayMax,
-  });
+  const _VoltScale({required this.min, required this.max, this.value});
   final double min, max;
-  final double? value, dayMin, dayMax;
+  final double? value;
 
   @override
   Widget build(BuildContext context) {
@@ -317,9 +282,7 @@ class _VoltScale extends StatelessWidget {
             children: [
               Positioned.fill(
                 bottom: 22,
-                child: CustomPaint(
-                  painter: _ScalePainter(lo, hi, min, max, dayMin, dayMax),
-                ),
+                child: CustomPaint(painter: _ScalePainter(lo, hi, min, max)),
               ),
               if (value != null)
                 TweenAnimationBuilder<double>(
@@ -353,9 +316,8 @@ class _VoltScale extends StatelessWidget {
 }
 
 class _ScalePainter extends CustomPainter {
-  _ScalePainter(this.lo, this.hi, this.min, this.max, this.dayMin, this.dayMax);
+  _ScalePainter(this.lo, this.hi, this.min, this.max);
   final double lo, hi, min, max;
-  final double? dayMin, dayMax;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -386,20 +348,10 @@ class _ScalePainter extends CustomPainter {
       );
       canvas.drawRRect(rr, Paint()..color = c);
     }
-    // today's lowest and highest
-    final tick = Paint()
-      ..color = C.text2
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    for (final v in [dayMin, dayMax]) {
-      if (v == null) continue;
-      canvas.drawLine(Offset(x(v), y - 4), Offset(x(v), y + h + 4), tick);
-    }
   }
 
   @override
-  bool shouldRepaint(_ScalePainter o) =>
-      o.min != min || o.max != max || o.dayMin != dayMin || o.dayMax != dayMax;
+  bool shouldRepaint(_ScalePainter o) => o.min != min || o.max != max;
 }
 
 /// Owner edits the home's normal voltage range.
@@ -435,7 +387,7 @@ class _RangeSheetState extends State<_RangeSheet> {
             Text('Normal voltage', style: t.titleLarge),
             const SizedBox(height: S.sm),
             Text(
-              'Outside this range you get a warning. More than ${voltSeriousMargin.round()} V outside it is a serious warning.',
+              'More than ${voltGrace.round()} V outside this range gives a warning. More than ${voltSeriousMargin.round()} V outside is a serious warning.',
               style: t.bodyMedium?.copyWith(color: C.text2),
             ),
             const SizedBox(height: S.xl),
@@ -457,7 +409,7 @@ class _RangeSheetState extends State<_RangeSheet> {
               children: [
                 Expanded(
                   child: Text(
-                    'A little outside: $lo–${lo - voltSeriousMargin.round()} V and $hi–${hi + voltSeriousMargin.round()} V\n'
+                    'A bit low: ${lo - voltSeriousMargin.round()}–${lo - voltGrace.round()} V · A bit high: ${hi + voltGrace.round()}–${hi + voltSeriousMargin.round()} V\n'
                     'Serious: below ${lo - voltSeriousMargin.round()} V or above ${hi + voltSeriousMargin.round()} V',
                     style: t.bodySmall?.copyWith(color: C.text2),
                   ),

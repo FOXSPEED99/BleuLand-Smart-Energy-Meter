@@ -17,12 +17,10 @@ class LiveCard extends StatefulWidget {
     required this.reading,
     required this.meter,
     this.loading = false,
-    this.todayKwh,
   });
   final LiveReading? reading;
   final Meter meter;
   final bool loading;
-  final double? todayKwh; // for "compared with your average today"
 
   @override
   State<LiveCard> createState() => _LiveCardState();
@@ -72,18 +70,34 @@ class _LiveCardState extends State<LiveCard> {
         ),
         border: Border.all(color: C.outline.withValues(alpha: 0.6)),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // title and status pill on one line
           Padding(
-            padding: const EdgeInsets.fromLTRB(S.xl, S.xl, S.xl, S.lg),
+            padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.lg, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Using now',
+                    style: t.titleSmall?.copyWith(color: C.text2),
+                  ),
+                ),
+                widget.loading
+                    ? const StatusPill(
+                        kind: PillKind.info,
+                        label: 'Connecting…',
+                      )
+                    : const StatusPill(kind: PillKind.live, label: 'Live'),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.xl, S.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Using now',
-                  style: t.titleSmall?.copyWith(color: C.text2),
-                ),
-                const SizedBox(height: S.xl),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -94,7 +108,7 @@ class _LiveCardState extends State<LiveCard> {
                           if (known) ...[
                             _CountingPower(watts: watts),
                             const SizedBox(height: S.sm),
-                            _UsageNote(watts: watts, todayKwh: widget.todayKwh),
+                            _UsageNote(watts: watts),
                           ] else ...[
                             Text(
                               'Connecting…',
@@ -131,14 +145,6 @@ class _LiveCardState extends State<LiveCard> {
                 ],
               ],
             ),
-          ),
-          // status sits in the card's corner, clear of the ring
-          Positioned(
-            top: S.md,
-            right: S.md,
-            child: widget.loading
-                ? const StatusPill(kind: PillKind.info, label: 'Connecting…')
-                : const StatusPill(kind: PillKind.live, label: 'Live'),
           ),
         ],
       ),
@@ -186,11 +192,10 @@ class _CountingPower extends StatelessWidget {
   }
 }
 
-/// "Light use · under 1 kW" and how it compares with today so far.
+/// "Light use · under 1 kW".
 class _UsageNote extends StatelessWidget {
-  const _UsageNote({required this.watts, this.todayKwh});
+  const _UsageNote({required this.watts});
   final double watts;
-  final double? todayKwh;
 
   @override
   Widget build(BuildContext context) {
@@ -202,47 +207,35 @@ class _UsageNote extends StatelessWidget {
       UsageLevel.high => (C.warning, Icons.trending_up_rounded),
       UsageLevel.veryHigh => (C.serious, Icons.warning_amber_rounded),
     };
-    final vs = todayKwh == null
-        ? null
-        : versusToday(watts, todayKwh: todayKwh!, now: DateTime.now());
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: Row(
-            key: ValueKey(level),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: c),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text.rich(
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Row(
+        key: ValueKey(level),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: c),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text.rich(
+              TextSpan(
+                children: [
                   TextSpan(
-                    children: [
-                      TextSpan(
-                        text: level.label,
-                        style: t.labelLarge?.copyWith(color: C.text),
-                      ),
-                      TextSpan(
-                        text: ' · ${level.range}',
-                        style: t.labelLarge?.copyWith(
-                          color: C.text2,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
+                    text: level.label,
+                    style: t.labelLarge?.copyWith(color: C.text),
                   ),
-                ),
+                  TextSpan(
+                    text: ' · ${level.range}',
+                    style: t.labelLarge?.copyWith(
+                      color: C.text2,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-        if (vs != null) ...[
-          const SizedBox(height: 2),
-          Text(vs, style: t.bodySmall?.copyWith(color: C.text2)),
         ],
-      ],
+      ),
     );
   }
 }

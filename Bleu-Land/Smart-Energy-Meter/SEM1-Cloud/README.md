@@ -46,7 +46,7 @@ Never put the **secret / service_role** key in the app or firmware.
 | `get_setup_code(p_id)` | owner: the label code needed for Bluetooth setup (kept by `claim_device` in `private.device_setup_codes`) |
 | `watch_device(p_id)` | "I'm looking at live values": the meter uploads every 2 s for the next 45 s (the app calls it every 25 s) |
 
-**Voltage alerts:** outside the owner's range for 60 s → alert; more than 10 V outside → serious (high voltage at once, without waiting). An alert closes when the voltage is back inside with 2 V to spare, so it doesn't flap at the limit. Readings below 100 V (no mains, e.g. a bench supply) are ignored.
+**Voltage alerts:** more than 3 V outside the owner's range for 60 s → alert (up to 3 V past a limit, e.g. 230.1 V on 200–230 V, is within the meter's tolerance and counts as normal; the app uses the same rule); more than 10 V outside → serious (high voltage at once, without waiting). An alert closes when the voltage is back within 1 V of the range (2 V below the trigger), so it doesn't flap at the limit. Readings below 100 V (no mains, e.g. a bench supply) are ignored.
 
 ## Default tariff (Syria, households)
 
@@ -78,6 +78,8 @@ Stable meter on the newest stable → up to date, request refused; beta meter �
 ## Verified (9 Oct 2026, rolled back): voltage and fast mode
 
 Normal → no alert; app watching → `fast: true`; low under 60 s → no alert; low over 60 s → alert (severity 1); 184.5 V → same alert upgraded to severity 2; 201 V → still "low" (2 V margin); 215 V → alert closed; 245 V spike → serious high-voltage alert at once; 0.8 V → ignored; daily lowest/highest stored.
+
+With the 3 V grace (`20261010090000_volt_grace.sql`, range 200–230 V): 230.1 V and 233 V → normal; 233.5 V → "high"; 232 V → still "high" (2 V margin); 230.5 V → back to normal; 196.5 V → "low"; 241 V → serious high-voltage alert at once.
 
 ## Verified (8 Oct 2026, inside a rolled-back transaction)
 

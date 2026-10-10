@@ -7,6 +7,7 @@ import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
+import '../home/voltage_card.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
 
@@ -40,6 +41,12 @@ class SettingsScreen extends ConsumerWidget {
                 title: 'Electricity price',
                 value: meter.tariff.isSet ? _tariffSummary(meter) : 'Not set',
                 onTap: meter.isOwner ? () => context.push('/settings/tariff') : null,
+              ),
+              _Row(
+                icon: Icons.speed_rounded,
+                title: 'Normal voltage',
+                value: '${meter.voltMin.round()}–${meter.voltMax.round()} V',
+                onTap: meter.isOwner ? () => _editVoltage(context, ref, meter) : null,
               ),
               _Row(
                 icon: Icons.group_rounded,
@@ -97,6 +104,13 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   static String _n(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+  Future<void> _editVoltage(BuildContext context, WidgetRef ref, Meter meter) async {
+    final r = await showVoltageRangeSheet(context, meter);
+    if (r == null) return;
+    await ref.read(repositoryProvider).updateMeter(meter.copyWith(voltMin: r.$1, voltMax: r.$2));
+    ref.invalidate(metersProvider);
+  }
 
   Future<void> _rename(BuildContext context, WidgetRef ref, Meter meter) async {
     final ctrl = TextEditingController(text: meter.name);

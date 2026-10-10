@@ -40,17 +40,20 @@ String? versusToday(double watts, {required double todayKwh, required DateTime n
   return 'Below your average today';
 }
 
-/// Mains voltage against the owner's normal range. "A little" outside is up
-/// to 10 V beyond the range; further than that is serious.
+/// Mains voltage against the owner's normal range. Up to 3 V past a limit
+/// still counts as normal (that's within the meter's own tolerance, and a
+/// 230.1 V blip is harmless). "A little" outside is from there to 10 V beyond
+/// the range; further than that is serious.
 enum VoltStatus { normal, lowMild, lowSerious, highMild, highSerious }
 
+const voltGrace = 3.0;
 const voltSeriousMargin = 10.0;
 
 VoltStatus voltStatus(double v, {required double min, required double max}) {
   if (v < min - voltSeriousMargin) return VoltStatus.lowSerious;
-  if (v < min) return VoltStatus.lowMild;
+  if (v < min - voltGrace) return VoltStatus.lowMild;
   if (v > max + voltSeriousMargin) return VoltStatus.highSerious;
-  if (v > max) return VoltStatus.highMild;
+  if (v > max + voltGrace) return VoltStatus.highMild;
   return VoltStatus.normal;
 }
 
