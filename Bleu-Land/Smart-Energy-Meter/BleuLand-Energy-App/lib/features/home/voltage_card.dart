@@ -49,15 +49,17 @@ class _VoltageCardState extends State<VoltageCard> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: S.md),
-      child: Container(
-        // a soft blue wash, like the live card's green one
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 600),
+        // a soft wash in the corner that follows the status: green when
+        // normal, amber a bit off, red when serious (like the live card)
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(R.lg),
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF152A3C), C.surface, C.surface],
-            stops: [0, 0.55, 1],
+            colors: [_wash(status), C.surface, C.surface],
+            stops: const [0, 0.55, 1],
           ),
         ),
         padding: const EdgeInsets.all(S.lg),
@@ -144,6 +146,13 @@ class _VoltageCardState extends State<VoltageCard> {
     );
   }
 }
+
+Color _wash(VoltStatus? s) => switch (s) {
+  null => C.surface, // no mains: plain
+  VoltStatus.normal => const Color(0xFF16302A),
+  VoltStatus.lowMild || VoltStatus.highMild => const Color(0xFF332A14),
+  VoltStatus.lowSerious || VoltStatus.highSerious => const Color(0xFF3A1E1F),
+};
 
 Color _color(VoltStatus s) => switch (s) {
   VoltStatus.normal => C.goodText,
