@@ -71,6 +71,7 @@ void applyCoeffs() {
   Lock l;
   hlw.setCoeffs(c);
   meter.setEnergySource(s.energySource);
+  meter.setNoLoadW(NO_LOAD_W);
 }
 
 // ---------------- metering task ----------------

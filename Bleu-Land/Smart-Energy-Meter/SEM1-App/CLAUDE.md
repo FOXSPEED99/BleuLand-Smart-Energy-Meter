@@ -73,7 +73,7 @@ PF = P / S
   - `KI = 0.001 / (R_burden / CT_turns)`, because the HLW8032 coefficient is 1.0 for a 1 mΩ shunt.
   - Prototype: SCT-013-030 (30 A/1 V, 1800 turns, about 62 Ω internal burden) with R14 = 0.44 Ω → **KI ≈ 4.12**.
   - Production: SCT-013-000 (100 A:50 mA, 2000 turns), R14 = 0.5 Ω → **KI = 4.0**, full scale about 87 A.
-- **Noise floor** is about 0.2 A of fake current with no load. If the power register overflows (no real power), report I = 0.
+- **Noise floor** is about 0.2 A of fake current with no load. If the power register overflows (no real power), report I = 0. Fox measured up to ~20 W of fake power with the clamp around nothing (Oct 2026), so firmware 0.4.1 reads anything under 25 W as 0 W / 0 A and counts no energy (stays on down to 20 W once a load is seen; `NO_LOAD_W` in config.h). Loads under ~25 W alone can't be measured with this CT and board.
 - **Energy:** the test firmware integrates P·dt. For production, consider the PF pulse counter. The commonly used formula is pulses per kWh = 1e9 × 3600 / (PowPar × KV × KI). Verify it against the datasheet.
 - **Direction:** the HLW8032 is assumed to give power **magnitude only** (no import/export sign). Verify before promising any solar or export features.
 

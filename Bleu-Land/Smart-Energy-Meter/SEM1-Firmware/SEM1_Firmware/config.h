@@ -5,7 +5,7 @@
 #include "board.h"
 
 #ifndef SEM1_FW_VERSION
-#define SEM1_FW_VERSION "0.4.0"
+#define SEM1_FW_VERSION "0.4.1"
 #endif
 
 // ---------- current transformer + burden (R14) ----------
@@ -15,6 +15,11 @@
 // The values for each board are in board.h:
 //   SEM1_CT_TURNS, SEM1_CT_INT_BURDEN (ohms inside the CT, 0 = current-output CT),
 //   SEM1_R14_OHMS
+
+// No-load cutoff: below this the current input only picks up noise. Measured
+// on the prototype (Oct 2026): up to ~20 W with the clamp around nothing or
+// unplugged, so anything under 25 W reads as 0 W and adds no energy.
+constexpr float NO_LOAD_W = 25.0f;
 
 // Voltage: 4 x 47k = 188k into ZMPT101B (2 mA:2 mA), 100 R burden -> same
 // ratio as the datasheet's 1.88 M / 1 k divider.

@@ -160,6 +160,43 @@ void test_meter_1000_imp_per_kwh_led() {
   TEST_ASSERT_UINT32_WITHIN(1, 10, pulses);
 }
 
+void test_meter_no_load_cutoff() {
+  Meter m;
+  m.setNoLoadW(25);
+  Reading r;
+  m.tick(0, r);
+  HlwSample s;
+  s.v = 230;
+  uint32_t t = 0;
+  auto second = [&](float w, float a) {
+    s.p = w;
+    s.i = a;
+    m.add(s);
+    t += 1000;
+    m.tick(t, r);
+  };
+  // noise: 20 W at 0.14 A reads as nothing and adds no energy
+  second(20, 0.14f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.i);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.pf);
+  TEST_ASSERT_EQUAL_FLOAT(0, (float)m.totalWh());
+  // a real 100 W load is measured and counted
+  second(100, 0.5f);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 100, r.p);
+  TEST_ASSERT_FLOAT_WITHIN(1e-6, 100.0 / 3600.0, m.totalWh());
+  // once on, it stays on down to 80 % of the limit (no flicker at the edge)
+  second(21, 0.1f);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 21, r.p);
+  second(19, 0.1f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  // and needs the full limit again to come back
+  second(24, 0.1f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  second(25, 0.12f);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 25, r.p);
+}
+
 void test_meter_no_data_flag() {
   Meter m;
   Reading r;
@@ -285,6 +322,7 @@ int main(int, char**) {
   RUN_TEST(test_calibration_scales_values);
   RUN_TEST(test_meter_averages_and_integrates);
   RUN_TEST(test_meter_1000_imp_per_kwh_led);
+  RUN_TEST(test_meter_no_load_cutoff);
   RUN_TEST(test_meter_no_data_flag);
   RUN_TEST(test_meter_caps_long_gap);
   RUN_TEST(test_log_append_and_read_back);

@@ -30,6 +30,13 @@ enum MeterFlags : uint8_t {
 class Meter {
  public:
   void setEnergySource(EnergySource s) { source_ = s; }
+
+  // No-load cutoff ("anti-creep"): a 1-second power below this many watts is
+  // noise on the current input, not a real load, so it reads as 0 W / 0 A and
+  // adds no energy. Once a load is seen it stays on until the power falls
+  // below 80 % of the limit, so a load near the limit doesn't flicker.
+  // 0 = off.
+  void setNoLoadW(float w) { noLoadW_ = w; }
   EnergySource energySource() const { return source_; }
 
   // Feed every valid packet.
@@ -61,6 +68,8 @@ class Meter {
 
  private:
   EnergySource source_ = EnergySource::Integrated;
+  float noLoadW_ = 0;
+  bool loadOn_ = false;
   double sumV_ = 0, sumI_ = 0, sumP_ = 0;
   uint32_t n_ = 0;
   double pulseWhAcc_ = 0;  // PF-pulse energy since the last tick

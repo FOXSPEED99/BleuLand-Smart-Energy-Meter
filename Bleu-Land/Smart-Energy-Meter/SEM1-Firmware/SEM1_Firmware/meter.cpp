@@ -36,6 +36,14 @@ bool Meter::tick(uint32_t nowMs, Reading& out) {
   } else {
     flags_ |= kFlagNoData;
   }
+  if (noLoadW_ > 0) {
+    loadOn_ = r.p >= (loadOn_ ? noLoadW_ * 0.8f : noLoadW_);
+    if (!loadOn_) {
+      r.i = 0;
+      r.p = 0;
+      pulseWhAcc_ = 0;
+    }
+  }
   r.s = r.v * r.i;
   r.pf = (r.s > 1.0f) ? r.p / r.s : 0;
   if (r.pf > 1.0f) r.pf = 1.0f;
