@@ -20,10 +20,14 @@ class VoltageCard extends StatefulWidget {
 }
 
 class _VoltageCardState extends State<VoltageCard> {
-  late final Timer _tick = Timer.periodic(
-    const Duration(seconds: 5),
-    (_) => setState(() {}),
-  );
+  // hides itself on its own when the meter stops reporting (see LiveCard)
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 2), (_) => setState(() {}));
+  }
 
   @override
   void dispose() {

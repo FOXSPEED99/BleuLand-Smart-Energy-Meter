@@ -28,11 +28,15 @@ class LiveCard extends StatefulWidget {
 
 class _LiveCardState extends State<LiveCard> {
   // Re-check the reading's age even when no new value arrives, so a meter
-  // that stops reporting turns "offline" on its own.
-  late final Timer _tick = Timer.periodic(
-    const Duration(seconds: 5),
-    (_) => setState(() {}),
-  );
+  // that stops reporting turns "offline" on its own. Started in initState:
+  // a lazy `late final` timer never started, because only dispose() used it.
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 2), (_) => setState(() {}));
+  }
 
   @override
   void dispose() {
