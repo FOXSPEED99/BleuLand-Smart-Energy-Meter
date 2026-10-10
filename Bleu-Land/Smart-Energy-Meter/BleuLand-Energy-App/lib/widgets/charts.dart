@@ -2,6 +2,7 @@
 // 2px lines with a 10 % wash, bars at most 24px wide with 4px rounded tops,
 // hairline solid gridlines, clean round ticks. Touch: the value shows in the
 // chart's title row (never under the finger) and stays after lifting it.
+import 'dart:async';
 import 'dart:math';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -40,14 +41,24 @@ FlGridData _grid(double step) => FlGridData(
       getDrawingHorizontalLine: (_) => const FlLine(color: C.grid, strokeWidth: 1),
     );
 
-/// The chart's title row: the title on the left; on the right the touched
-/// value and time (with a × to clear), or a quiet summary such as the peak.
+/// The chart's title row: the title, plus a quiet summary (e.g. the peak) on
+/// the right. While a point is picked the whole row becomes its readout:
+/// ‹ value · time › and a x to clear. The arrows step one point at a time
+/// (hold to keep going), for exact picks where the points are close.
 class _ChartHeader extends StatelessWidget {
-  const _ChartHeader({required this.title, this.value, this.when, this.summary, this.onClear});
+  const _ChartHeader({
+    required this.title,
+    this.value,
+    this.when,
+    this.summary,
+    this.onClear,
+    this.onPrev,
+    this.onNext,
+  });
   final String title;
-  final String? value, when; // touched point
-  final String? summary; // shown when nothing is touched
-  final VoidCallback? onClear;
+  final String? value, when; // picked point
+  final String? summary; // shown when nothing is picked
+  final VoidCallback? onClear, onPrev, onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -56,39 +67,126 @@ class _ChartHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: S.sm, bottom: S.md),
       child: SizedBox(
-        height: 30,
-        child: Row(children: [
-          Text(title, style: t.labelMedium?.copyWith(color: C.text2)),
-          const Spacer(),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 150),
-            child: picked
-                ? Container(
-                    key: const ValueKey('picked'),
-                    padding: const EdgeInsets.only(left: 12, right: 4),
-                    decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(99)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text(value!, style: t.titleSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                      const SizedBox(width: 6),
-                      Text(when ?? '', style: t.labelSmall?.copyWith(color: C.text2)),
-                      SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          iconSize: 16,
-                          tooltip: 'Clear',
-                          onPressed: onClear,
-                          icon: const Icon(Icons.close_rounded, color: C.text3),
-                        ),
+        height: 36,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 150),
+          child: picked
+              ? Container(
+                  key: const ValueKey('picked'),
+                  decoration: BoxDecoration(color: C.surface2, borderRadius: BorderRadius.circular(99)),
+                  child: Row(children: [
+                    _StepButton(icon: Icons.chevron_left_rounded, onStep: onPrev),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text(value!, style: t.titleSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                          const SizedBox(width: 8),
+                          Text(when ?? '', style: t.labelMedium?.copyWith(color: C.text2)),
+                        ]),
                       ),
-                    ]),
-                  )
-                : Text(summary ?? '', key: const ValueKey('summary'), style: t.labelSmall?.copyWith(color: C.text3)),
-          ),
-        ]),
+                    ),
+                    _StepButton(icon: Icons.chevron_right_rounded, onStep: onNext),
+                    Container(width: 1, height: 18, color: C.outline),
+                    SizedBox(
+                      width: 40,
+                      height: 36,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        iconSize: 18,
+                        tooltip: 'Clear',
+                        onPressed: onClear,
+                        icon: const Icon(Icons.close_rounded, color: C.text3),
+                      ),
+                    ),
+                  ]),
+                )
+              : Row(key: const ValueKey('title'), children: [
+                  Text(title, style: t.labelMedium?.copyWith(color: C.text2)),
+                  const Spacer(),
+                  Text(summary ?? '', style: t.labelSmall?.copyWith(color: C.text3)),
+                ]),
+        ),
       ),
     );
+  }
+}
+
+/// ‹ / › : tap for one step, hold to keep stepping. Greyed out at the ends.
+class _StepButton extends StatefulWidget {
+  const _StepButton({required this.icon, this.onStep});
+  final IconData icon;
+  final VoidCallback? onStep;
+
+  @override
+  State<_StepButton> createState() => _StepButtonState();
+}
+
+class _StepButtonState extends State<_StepButton> {
+  Timer? _repeat;
+
+  void _stop() {
+    _repeat?.cancel();
+    _repeat = null;
+  }
+
+  @override
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = widget.onStep != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onStep,
+      onLongPressStart: on
+          ? (_) => _repeat = Timer.periodic(const Duration(milliseconds: 110), (_) => widget.onStep?.call())
+          : null,
+      onLongPressEnd: (_) => _stop(),
+      onLongPressCancel: _stop,
+      child: SizedBox(
+        width: 44,
+        height: 36,
+        child: Icon(widget.icon, size: 24, color: on ? C.text : C.text3.withValues(alpha: 0.4)),
+      ),
+    );
+  }
+}
+
+/// 24 h · 6 h · 1 h: how much of the day the power chart shows.
+class _RangeChips extends StatelessWidget {
+  const _RangeChips({required this.hours, required this.onChanged});
+  final int hours;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      for (final h in const [24, 6, 1])
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(99),
+            onTap: () => onChanged(h),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: h == hours ? C.series.withValues(alpha: 0.22) : Colors.transparent,
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                '$h h',
+                style: t.labelMedium?.copyWith(color: h == hours ? C.brand : C.text3),
+              ),
+            ),
+          ),
+        ),
+    ]);
   }
 }
 
@@ -104,22 +202,41 @@ class PowerAreaChart extends StatefulWidget {
 }
 
 class _PowerAreaChartState extends State<PowerAreaChart> {
-  int? _sel; // touched point; stays after the finger lifts
+  int? _sel; // picked point (index into the visible points); stays after the finger lifts
+  int _hours = 24; // 24 / 6 / 1
+
+  List<PowerPoint> _visible(List<PowerPoint> all) {
+    if (all.isEmpty || _hours >= 24) return all;
+    final from = all.last.ts.subtract(Duration(hours: _hours));
+    return all.where((p) => !p.ts.isBefore(from)).toList();
+  }
+
+  /// Keep the same moment picked when the data or the range changes.
+  int? _reselect(List<PowerPoint> before, List<PowerPoint> after) {
+    if (_sel == null || _sel! >= before.length) return null;
+    final ts = before[_sel!].ts;
+    final i = after.indexWhere((p) => p.ts == ts);
+    return i < 0 ? null : i;
+  }
 
   @override
   void didUpdateWidget(PowerAreaChart old) {
     super.didUpdateWidget(old);
-    // new data every few minutes: keep the same moment selected if it's still there
-    if (_sel != null) {
-      final ts = _sel! < old.points.length ? old.points[_sel!].ts : null;
-      final i = ts == null ? -1 : widget.points.indexWhere((p) => p.ts == ts);
-      _sel = i < 0 ? null : i;
-    }
+    _sel = _reselect(_visible(old.points), _visible(widget.points));
+  }
+
+  void _setRange(int h) {
+    if (h == _hours) return;
+    final before = _visible(widget.points);
+    setState(() {
+      _hours = h;
+      _sel = _reselect(before, _visible(widget.points));
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final points = widget.points;
+    final points = _visible(widget.points);
     final height = widget.height;
     if (points.length < 2) {
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -128,15 +245,22 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
           height: height,
           child: Center(child: Text('Not enough data yet', style: _axisStyle.copyWith(fontSize: 13))),
         ),
+        if (widget.points.length >= 2) ...[
+          const SizedBox(height: S.sm),
+          _RangeChips(hours: _hours, onChanged: _setRange),
+        ],
       ]);
     }
-    final t0 = points.first.ts;
-    double x(DateTime t) => t.difference(t0).inMinutes.toDouble();
+    // x = minutes since midnight, so time labels land on round times
+    // (00:00 / 06:00 ..., every 2 h at 6 h, every 15 min at 1 h)
+    final first = points.first.ts;
+    final origin = DateTime(first.year, first.month, first.day);
+    double x(DateTime t) => t.difference(origin).inSeconds / 60;
+    final labelEvery = switch (_hours) { 1 => 15, 6 => 120, _ => 360 }; // minutes
     final spots = [for (final p in points) FlSpot(x(p.ts), p.avgW / 1000)];
     final peak = points.reduce((a, b) => b.avgW > a.avgW ? b : a);
     final axis = niceAxis(peak.avgW / 1000 * 1.1);
-    final span = x(points.last.ts);
-    final sel = _sel;
+    final sel = _sel != null && _sel! < points.length ? _sel : null;
     final bar = LineChartBarData(
       spots: spots,
       isCurved: true,
@@ -145,7 +269,7 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
       color: C.series,
       barWidth: 2,
       isStrokeCapRound: true,
-      dotData: const FlDotData(show: false),
+      dotData: FlDotData(show: _hours == 1), // at 1 h every 5-minute point is visible
       belowBarData: BarAreaData(show: true, color: C.seriesWash),
       showingIndicators: sel == null ? const [] : [sel],
     );
@@ -157,13 +281,15 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
         when: sel == null ? null : DateFormat('HH:mm').format(points[sel].ts),
         summary: peak.avgW > 0 ? 'Peak ${fmtPowerText(peak.avgW)} · ${DateFormat('HH:mm').format(peak.ts)}' : null,
         onClear: () => setState(() => _sel = null),
+        onPrev: sel != null && sel > 0 ? () => setState(() => _sel = sel - 1) : null,
+        onNext: sel != null && sel < points.length - 1 ? () => setState(() => _sel = (_sel ?? sel) + 1) : null,
       ),
       SizedBox(
         height: height,
         child: LineChart(
           LineChartData(
-            minX: 0,
-            maxX: span,
+            minX: x(first),
+            maxX: x(points.last.ts),
             minY: 0,
             maxY: axis.max,
             gridData: _grid(axis.step),
@@ -183,11 +309,11 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
                 sideTitles: SideTitles(
                   showTitles: true,
                   reservedSize: 24,
-                  interval: 60,
+                  interval: labelEvery.toDouble(),
                   getTitlesWidget: (v, meta) {
-                    final t = t0.add(Duration(minutes: v.round()));
-                    // label only round 6-hour marks
-                    if (t.minute > 4 || t.hour % 6 != 0) return const SizedBox.shrink();
+                    // only round times (not the chart's first/last point)
+                    if (v.round() % labelEvery != 0) return const SizedBox.shrink();
+                    final t = origin.add(Duration(minutes: v.round()));
                     return SideTitleWidget(meta: meta, child: Text(DateFormat('HH:mm').format(t), style: _axisStyle));
                   },
                 ),
@@ -227,6 +353,8 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
           duration: const Duration(milliseconds: 250),
         ),
       ),
+      const SizedBox(height: S.sm),
+      _RangeChips(hours: _hours, onChanged: _setRange),
     ]);
   }
 }
@@ -299,6 +427,8 @@ class _EnergyBarChartState extends State<EnergyBarChart> {
         when: sel == null ? null : _when(points[sel].start),
         summary: peak != null && peak.kwh > 0 ? 'Peak ${_peakLabel(peak.start)} · ${fmtKwh(peak.kwh)}' : null,
         onClear: () => setState(() => _sel = null),
+        onPrev: sel != null && sel > 0 ? () => setState(() => _sel = sel - 1) : null,
+        onNext: sel != null && sel < points.length - 1 ? () => setState(() => _sel = (_sel ?? sel) + 1) : null,
       ),
       LayoutBuilder(builder: (context, box) {
         final slot = (box.maxWidth - 40) / max(points.length, 1);
