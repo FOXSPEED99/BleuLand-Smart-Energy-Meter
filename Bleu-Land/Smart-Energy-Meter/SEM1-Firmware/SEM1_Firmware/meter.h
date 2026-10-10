@@ -31,12 +31,15 @@ class Meter {
  public:
   void setEnergySource(EnergySource s) { source_ = s; }
 
-  // No-load cutoff ("anti-creep"): a 1-second power below this many watts is
-  // noise on the current input, not a real load, so it reads as 0 W / 0 A and
-  // adds no energy. Once a load is seen it stays on until the power falls
-  // below 80 % of the limit, so a load near the limit doesn't flicker.
-  // 0 = off.
+  // No-load cutoff ("anti-creep"): power below this many watts is noise on
+  // the current input, not a real load, so it reads as 0 W / 0 A and adds no
+  // energy. Noise also makes single-second spikes just above the limit, so a
+  // load must stay above it for kLoadConfirmS seconds in a row before it
+  // shows; the energy of those seconds is then added, so nothing is lost.
+  // Once on, it stays on until the power falls below 80 % of the limit, so a
+  // load near the limit doesn't flicker. 0 = off.
   void setNoLoadW(float w) { noLoadW_ = w; }
+  static constexpr uint8_t kLoadConfirmS = 3;
   EnergySource energySource() const { return source_; }
 
   // Feed every valid packet.
@@ -70,6 +73,9 @@ class Meter {
   EnergySource source_ = EnergySource::Integrated;
   float noLoadW_ = 0;
   bool loadOn_ = false;
+  uint8_t aboveS_ = 0;                     // seconds in a row above the limit
+  double heldIntWh_ = 0, heldPulseWh_ = 0;  // their energy, until confirmed
+  bool loadGate(float p, double& intWh, double& pulseWh);
   double sumV_ = 0, sumI_ = 0, sumP_ = 0;
   uint32_t n_ = 0;
   double pulseWhAcc_ = 0;  // PF-pulse energy since the last tick

@@ -12,7 +12,7 @@ The firmware picks the right pins and CT values from the board you select; you d
 
 ## What it does (stage 1)
 
-- **Reads the HLW8032.** Packets are found with a sliding window and the checksum, as in the test firmware. Values are averaged every second, and the "no load → I = 0" rule is kept. **No-load cutoff (0.4.1):** a 1-second power under 25 W is noise on the current input (measured up to ~20 W with the clamp around nothing), so it reads as 0 W / 0 A and adds no energy; once a load is seen it stays on down to 20 W so it doesn't flicker (`NO_LOAD_W` in config.h).
+- **Reads the HLW8032.** Packets are found with a sliding window and the checksum, as in the test firmware. Values are averaged every second, and the "no load → I = 0" rule is kept. **No-load cutoff (0.4.1):** a 1-second power under 25 W is noise on the current input (measured up to ~20 W with the clamp around nothing), so it reads as 0 W / 0 A and adds no energy; a load must also stay above 25 W for 3 seconds in a row before it shows (0.4.2; noise makes single-second spikes of 25-28 W), and the energy of those 3 seconds is then counted; once a load is seen it stays on down to 20 W so it doesn't flicker (`NO_LOAD_W` in config.h).
 - **Energy counter.** The lifetime kWh total never goes backwards and survives power cuts:
   - it's saved every 10 s in the DS1307's battery-backed RAM, which doesn't wear out;
   - and every 5 minutes in the history log.

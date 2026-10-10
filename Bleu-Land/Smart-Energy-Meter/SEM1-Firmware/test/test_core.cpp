@@ -181,17 +181,32 @@ void test_meter_no_load_cutoff() {
   TEST_ASSERT_EQUAL_FLOAT(0, r.i);
   TEST_ASSERT_EQUAL_FLOAT(0, r.pf);
   TEST_ASSERT_EQUAL_FLOAT(0, (float)m.totalWh());
-  // a real 100 W load is measured and counted
+  // single-second noise spikes above the limit don't show either
+  second(27, 0.15f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  second(10, 0.1f);
+  second(28, 0.15f);
+  second(26, 0.15f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  second(5, 0.1f);
+  TEST_ASSERT_EQUAL_FLOAT(0, (float)m.totalWh());
+  // a real 100 W load shows on its 3rd second, and all 3 seconds are counted
+  second(100, 0.5f);
+  second(100, 0.5f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  TEST_ASSERT_EQUAL_FLOAT(0, (float)m.totalWh());
   second(100, 0.5f);
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 100, r.p);
-  TEST_ASSERT_FLOAT_WITHIN(1e-6, 100.0 / 3600.0, m.totalWh());
+  TEST_ASSERT_FLOAT_WITHIN(1e-6, 300.0 / 3600.0, m.totalWh());
   // once on, it stays on down to 80 % of the limit (no flicker at the edge)
   second(21, 0.1f);
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 21, r.p);
   second(19, 0.1f);
   TEST_ASSERT_EQUAL_FLOAT(0, r.p);
-  // and needs the full limit again to come back
+  // and needs the full limit for 3 s again to come back
   second(24, 0.1f);
+  second(25, 0.12f);
+  second(25, 0.12f);
   TEST_ASSERT_EQUAL_FLOAT(0, r.p);
   second(25, 0.12f);
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 25, r.p);

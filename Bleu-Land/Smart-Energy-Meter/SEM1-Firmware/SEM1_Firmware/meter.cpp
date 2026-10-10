@@ -36,20 +36,17 @@ bool Meter::tick(uint32_t nowMs, Reading& out) {
   } else {
     flags_ |= kFlagNoData;
   }
-  if (noLoadW_ > 0) {
-    loadOn_ = r.p >= (loadOn_ ? noLoadW_ * 0.8f : noLoadW_);
-    if (!loadOn_) {
-      r.i = 0;
-      r.p = 0;
-      pulseWhAcc_ = 0;
-    }
+  double integratedWh = (double)r.p * elapsed / 3600000.0;
+  double pulseWh = pulseWhAcc_;
+  if (noLoadW_ > 0 && !loadGate(r.p, integratedWh, pulseWh)) {
+    r.i = 0;
+    r.p = 0;
+    integratedWh = pulseWh = 0;
   }
   r.s = r.v * r.i;
   r.pf = (r.s > 1.0f) ? r.p / r.s : 0;
   if (r.pf > 1.0f) r.pf = 1.0f;
 
-  double integratedWh = (double)r.p * elapsed / 3600000.0;
-  double pulseWh = pulseWhAcc_;
   double dWh = (source_ == EnergySource::PfPulses) ? pulseWh : integratedWh;
   altWh_ += (source_ == EnergySource::PfPulses) ? integratedWh : pulseWh;
   if (dWh < 0) dWh = 0;
@@ -66,6 +63,31 @@ bool Meter::tick(uint32_t nowMs, Reading& out) {
   pulseWhAcc_ = 0;
   last_ = r;
   out = r;
+  return true;
+}
+
+// True when this second counts as a real load. While a load is being
+// confirmed its energy is held back, then handed over in one go (through
+// intWh/pulseWh) on the second it's confirmed.
+bool Meter::loadGate(float p, double& intWh, double& pulseWh) {
+  if (loadOn_) {
+    if (p >= noLoadW_ * 0.8f) return true;
+    loadOn_ = false;
+    return false;
+  }
+  if (p < noLoadW_) {
+    aboveS_ = 0;
+    heldIntWh_ = heldPulseWh_ = 0;
+    return false;
+  }
+  heldIntWh_ += intWh;
+  heldPulseWh_ += pulseWh;
+  if (++aboveS_ < kLoadConfirmS) return false;
+  loadOn_ = true;
+  intWh = heldIntWh_;
+  pulseWh = heldPulseWh_;
+  aboveS_ = 0;
+  heldIntWh_ = heldPulseWh_ = 0;
   return true;
 }
 

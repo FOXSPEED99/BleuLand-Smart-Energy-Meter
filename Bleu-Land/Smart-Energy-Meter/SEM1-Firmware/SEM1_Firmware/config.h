@@ -5,7 +5,7 @@
 #include "board.h"
 
 #ifndef SEM1_FW_VERSION
-#define SEM1_FW_VERSION "0.4.1"
+#define SEM1_FW_VERSION "0.4.2"
 #endif
 
 // ---------- current transformer + burden (R14) ----------
@@ -18,7 +18,9 @@
 
 // No-load cutoff: below this the current input only picks up noise. Measured
 // on the prototype (Oct 2026): up to ~20 W with the clamp around nothing or
-// unplugged, so anything under 25 W reads as 0 W and adds no energy.
+// unplugged, so anything under 25 W reads as 0 W and adds no energy. Noise
+// spikes reach 25-28 W for a single second, so a load must also last 3 s
+// (Meter::kLoadConfirmS) before it shows.
 constexpr float NO_LOAD_W = 25.0f;
 
 // Voltage: 4 x 47k = 188k into ZMPT101B (2 mA:2 mA), 100 R burden -> same
