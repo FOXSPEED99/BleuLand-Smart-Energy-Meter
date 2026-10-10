@@ -62,12 +62,14 @@ class _VoltageCardState extends State<VoltageCard> {
                 const Icon(Icons.speed_rounded, size: 18, color: C.text2),
                 const SizedBox(width: S.sm),
                 Expanded(child: Text('Voltage', style: t.titleSmall)),
-                if (status != null) _StatusChip(status: status),
+                Text(
+                  'Normal ${m.voltMin.round()}–${m.voltMax.round()} V',
+                  style: t.labelMedium?.copyWith(color: C.text2),
+                ),
               ],
             ),
-            const SizedBox(height: S.md),
+            const SizedBox(height: S.lg),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 if (v == null)
                   Text(
@@ -87,7 +89,7 @@ class _VoltageCardState extends State<VoltageCard> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    padding: const EdgeInsets.only(left: 4, top: 6),
                     child: Text(
                       'V',
                       style: t.titleMedium?.copyWith(color: C.text2),
@@ -95,13 +97,7 @@ class _VoltageCardState extends State<VoltageCard> {
                   ),
                 ],
                 const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: S.xs),
-                  child: Text(
-                    'Normal ${m.voltMin.round()}–${m.voltMax.round()} V',
-                    style: t.labelMedium?.copyWith(color: C.text2),
-                  ),
-                ),
+                if (status != null) _StatusChip(status: status),
               ],
             ),
             const SizedBox(height: S.md),
@@ -130,23 +126,22 @@ class _VoltageCardState extends State<VoltageCard> {
               ),
             ],
             const SizedBox(height: S.md),
+            // lowest on the left edge, highest on the right edge
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: _DayStat(
-                    label: 'Lowest today',
-                    v: today?.min,
-                    at: today?.minAt,
-                    m: m,
-                  ),
+                _DayStat(
+                  label: 'Lowest today',
+                  v: today?.min,
+                  at: today?.minAt,
+                  m: m,
                 ),
-                Expanded(
-                  child: _DayStat(
-                    label: 'Highest today',
-                    v: today?.max,
-                    at: today?.maxAt,
-                    m: m,
-                  ),
+                _DayStat(
+                  label: 'Highest today',
+                  v: today?.max,
+                  at: today?.maxAt,
+                  m: m,
+                  end: true,
                 ),
               ],
             ),
@@ -210,8 +205,10 @@ class _DayStat extends StatelessWidget {
     required this.v,
     required this.at,
     required this.m,
+    this.end = false,
   });
   final String label;
+  final bool end; // right-aligned
   final double? v;
   final DateTime? at;
   final Meter m;
@@ -224,11 +221,14 @@ class _DayStat extends StatelessWidget {
         ? null
         : voltStatus(value, min: m.voltMin, max: m.voltMax);
     return Column(
+      crossAxisAlignment: end
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Text(label, style: t.labelSmall?.copyWith(color: C.text3)),
         const SizedBox(height: 2),
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(value == null ? '–' : fmtVolts(value), style: t.titleSmall),
             if (s != null && s != VoltStatus.normal) ...[
