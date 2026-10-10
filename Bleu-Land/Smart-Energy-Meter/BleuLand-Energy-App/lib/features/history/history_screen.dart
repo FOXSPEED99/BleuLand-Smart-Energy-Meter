@@ -131,20 +131,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             data: (raw) {
               final pts = _complete(raw, w.from, w.to, w.bucket);
               final total = pts.fold<double>(0, (a, p) => a + p.kwh);
-              final peak = pts.isEmpty ? null : pts.reduce((a, b) => a.kwh >= b.kwh ? a : b);
               // averages only count time that has already passed
               final end = w.to.isAfter(now) ? now : w.to;
               final elapsedH = end.difference(w.from).inMinutes / 60;
               final perUnit = w.bucket == Bucket.hour
                   ? total / (elapsedH < 1 ? 1 : elapsedH)
                   : total / (elapsedH < 24 ? 1 : elapsedH / 24);
-              final peakLabel = peak == null
-                  ? '–'
-                  : switch (w.bucket) {
-                      Bucket.hour => DateFormat('HH:00').format(peak.start),
-                      Bucket.day => DateFormat('EEE d').format(peak.start),
-                      Bucket.month => DateFormat('MMM').format(peak.start),
-                    };
               return Column(children: [
                 Row(children: [
                   Expanded(child: StatTile(label: 'Total', value: fmtKwh(total, unit: false), unit: 'kWh')),
@@ -161,10 +153,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 Panel(
                   padding: const EdgeInsets.fromLTRB(S.sm, S.lg, S.lg, S.sm),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: S.sm, bottom: S.md),
-                      child: Row(children: [
-                        Text(
+                    if (total == 0) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(left: S.sm, bottom: S.md),
+                        child: Text(
                           switch (w.bucket) {
                             Bucket.hour => 'Energy per hour, kWh',
                             Bucket.day => 'Energy per day, kWh',
@@ -172,20 +164,20 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                           },
                           style: t.labelMedium?.copyWith(color: C.text2),
                         ),
-                        const Spacer(),
-                        if (peak != null && peak.kwh > 0)
-                          Text('Peak $peakLabel · ${fmtKwh(peak.kwh)}', style: t.labelSmall?.copyWith(color: C.text3)),
-                      ]),
-                    ),
-                    if (total == 0)
+                      ),
                       SizedBox(
                         height: 220,
                         child: Center(child: Text('No data for this period', style: t.bodyMedium?.copyWith(color: C.text3))),
-                      )
-                    else
+                      ),
+                    ] else
                       EnergyBarChart(
                         points: pts,
                         bucket: w.bucket,
+                        title: switch (w.bucket) {
+                          Bucket.hour => 'Energy per hour, kWh',
+                          Bucket.day => 'Energy per day, kWh',
+                          Bucket.month => 'Energy per month, kWh',
+                        },
                         highlight: offset == 0 ? highlight : null,
                         labelEvery: switch (w.bucket) {
                           Bucket.hour => 3,
@@ -197,7 +189,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 ),
                 const SizedBox(height: S.md),
                 Text(
-                  'Tap a bar to see its value. Times are in the meter\'s time zone.',
+                  'Tap or slide across the chart to see a value. Times are in the meter\'s time zone.',
                   style: t.labelSmall?.copyWith(color: C.text3),
                   textAlign: TextAlign.center,
                 ),

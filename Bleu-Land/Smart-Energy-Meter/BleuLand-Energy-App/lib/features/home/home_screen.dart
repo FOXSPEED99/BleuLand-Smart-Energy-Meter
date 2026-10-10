@@ -206,19 +206,7 @@ class _DashboardState extends ConsumerState<_Dashboard>
                 height: 180,
                 child: Center(child: Text('Could not load the chart')),
               ),
-              data: (pts) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: S.sm, bottom: S.md),
-                    child: Text(
-                      'Power, kW',
-                      style: t.labelMedium?.copyWith(color: C.text2),
-                    ),
-                  ),
-                  PowerAreaChart(points: pts),
-                ],
-              ),
+              data: (pts) => PowerAreaChart(points: pts),
             ),
           ),
         ],
