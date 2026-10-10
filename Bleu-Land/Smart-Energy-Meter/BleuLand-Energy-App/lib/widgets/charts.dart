@@ -198,6 +198,9 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
               handleBuiltInTouches: false,
               touchSpotThreshold: double.infinity,
               distanceCalculator: (touch, spot) => (touch.dx - spot.dx).abs(), // nearest in time
+              // the guide line runs the full height, so it shows even at 0 W
+              getTouchLineStart: (_, _) => 0,
+              getTouchLineEnd: (_, _) => axis.max,
               touchCallback: (event, resp) {
                 if (!event.isInterestedForInteractions) return;
                 final hit = resp?.lineBarSpots;
