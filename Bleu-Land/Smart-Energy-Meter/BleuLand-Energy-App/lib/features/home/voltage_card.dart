@@ -51,13 +51,14 @@ class _VoltageCardState extends State<VoltageCard> {
       padding: const EdgeInsets.only(bottom: S.md),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 600),
-        // a soft wash in the corner that follows the status: green when
-        // normal, amber a bit off, red when serious (like the live card)
+        // a soft wash in the top-right corner (the live card's is top-left)
+        // that follows the status: green when normal, amber a bit off, red
+        // when serious
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(R.lg),
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
             colors: [_wash(status), C.surface, C.surface],
             stops: const [0, 0.55, 1],
           ),
