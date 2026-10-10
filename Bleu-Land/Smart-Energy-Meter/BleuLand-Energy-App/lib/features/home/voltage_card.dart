@@ -37,15 +37,13 @@ class _VoltageCardState extends State<VoltageCard> {
     final m = widget.meter;
     final r = widget.reading;
     final now = DateTime.now();
-    // Nothing to show while the meter is offline: hide the whole card.
+    // Nothing to show while the meter is offline, or when it reports no mains
+    // (below 100 V, e.g. powered from USB): hide the whole card.
     final reporting =
         r != null && now.difference(r.ts) <= AppConfig.offlineAfter;
-    if (!reporting) return const SizedBox.shrink();
-    final live = r.volts >= 100; // below 100 V = no mains (e.g. bench supply)
-    final v = live ? r.volts : null;
-    final status = v == null
-        ? null
-        : voltStatus(v, min: m.voltMin, max: m.voltMax);
+    if (!reporting || r.volts < 100) return const SizedBox.shrink();
+    final v = r.volts;
+    final status = voltStatus(v, min: m.voltMin, max: m.voltMax);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: S.md),
@@ -81,43 +79,36 @@ class _VoltageCardState extends State<VoltageCard> {
             const SizedBox(height: S.lg),
             Row(
               children: [
-                if (v == null)
-                  Text(
-                    'No mains voltage',
+                TweenAnimationBuilder<double>(
+                  tween: Tween(end: v),
+                  duration: const Duration(milliseconds: 1600),
+                  curve: Curves.easeInOutCubic,
+                  builder: (_, x, _) => Text(
+                    NumberFormat('0.0').format(x),
+                    style: t.headlineMedium?.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, top: 6),
+                  child: Text(
+                    'V',
                     style: t.titleMedium?.copyWith(color: C.text2),
-                  )
-                else ...[
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(end: v),
-                    duration: const Duration(milliseconds: 1600),
-                    curve: Curves.easeInOutCubic,
-                    builder: (_, x, _) => Text(
-                      NumberFormat('0.0').format(x),
-                      style: t.headlineMedium?.copyWith(
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 6),
-                    child: Text(
-                      'V',
-                      style: t.titleMedium?.copyWith(color: C.text2),
-                    ),
-                  ),
-                ],
+                ),
                 const Spacer(),
-                if (status != null) _StatusChip(status: status),
+                _StatusChip(status: status),
               ],
             ),
             const SizedBox(height: S.lg),
             _VoltScale(min: m.voltMin, max: m.voltMax, value: v),
-            if (status?.advice != null) ...[
+            if (status.advice != null) ...[
               const SizedBox(height: S.md),
               Container(
                 padding: const EdgeInsets.all(S.md),
                 decoration: BoxDecoration(
-                  color: _color(status!).withValues(alpha: 0.10),
+                  color: _color(status).withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(R.md),
                 ),
                 child: Row(
@@ -148,8 +139,7 @@ class _VoltageCardState extends State<VoltageCard> {
   }
 }
 
-Color _wash(VoltStatus? s) => switch (s) {
-  null => C.surface, // no mains: plain
+Color _wash(VoltStatus s) => switch (s) {
   VoltStatus.normal => const Color(0xFF16302A),
   VoltStatus.lowMild || VoltStatus.highMild => const Color(0xFF332A14),
   VoltStatus.lowSerious || VoltStatus.highSerious => const Color(0xFF3A1E1F),
