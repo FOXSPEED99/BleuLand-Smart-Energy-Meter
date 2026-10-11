@@ -38,6 +38,11 @@ abstract class EnergyRepository {
   Future<UpdateRequest> requestUpdate(String meterId);
   Future<void> cancelUpdate(String meterId);
 
+  /// "Start fresh" (owner only): delete the meter's energy history and
+  /// alerts, so the bill, charts and History start from zero. The meter and
+  /// its settings stay.
+  Future<void> resetData(String meterId);
+
   Future<List<Invite>> invites(String meterId);
   Future<int> memberCount(String meterId);
   Future<void> invite(String meterId, String email);

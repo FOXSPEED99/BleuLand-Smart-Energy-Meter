@@ -241,6 +241,9 @@ class DemoRepository implements EnergyRepository {
   Future<void> cancelUpdate(String meterId) async => _updateStarted = null;
 
   @override
+  Future<void> resetData(String meterId) async {} // the demo has nothing to keep
+
+  @override
   Future<List<Invite>> invites(String meterId) async => List.of(_invites);
 
   @override

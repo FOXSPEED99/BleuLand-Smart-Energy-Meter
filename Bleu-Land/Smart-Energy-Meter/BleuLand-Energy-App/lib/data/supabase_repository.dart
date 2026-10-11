@@ -276,6 +276,12 @@ class SupabaseRepository implements EnergyRepository {
   }
 
   @override
+  Future<void> resetData(String meterId) async {
+    final r = Map<String, dynamic>.from(await _db.rpc('reset_device_data', params: {'p_id': meterId}) as Map);
+    if (r['ok'] != true) throw StateError(r['error']?.toString() ?? 'failed');
+  }
+
+  @override
   Future<void> cancelUpdate(String meterId) async {
     await _db.rpc('cancel_update', params: {'p_id': meterId});
   }

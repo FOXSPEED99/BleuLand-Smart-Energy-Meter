@@ -58,6 +58,18 @@ class SettingsScreen extends ConsumerWidget {
               _WifiRow(meter: meter),
               _FirmwareRow(meter: meter),
             ]),
+            if (meter.isOwner && !demo) ...[
+              const SectionHeader('Start fresh'),
+              _Group(children: [
+                _Row(
+                  icon: Icons.restart_alt_rounded,
+                  title: 'Reset usage data',
+                  value: 'Clears the bill, history, charts and alerts',
+                  danger: true,
+                  onTap: () => _resetData(context, ref, meter),
+                ),
+              ]),
+            ],
           ],
           const SectionHeader('Meters'),
           _Group(children: [
@@ -113,6 +125,26 @@ class SettingsScreen extends ConsumerWidget {
     if (r == null) return;
     await ref.read(repositoryProvider).updateMeter(meter.copyWith(voltMin: r.$1, voltMax: r.$2));
     ref.invalidate(metersProvider);
+  }
+
+  Future<void> _resetData(BuildContext context, WidgetRef ref, Meter meter) async {
+    final ok = await showDialog<bool>(context: context, builder: (_) => _ResetDialog(meterName: meter.name));
+    if (ok != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(repositoryProvider).resetData(meter.id);
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('Couldn\'t reset. Check your internet connection and try again.')));
+      return;
+    }
+    // nothing old may come back from the phone's saved copy either
+    await OfflineCache.clear(ref.read(prefsProvider));
+    ref.invalidate(metersProvider);
+    ref.invalidate(cycleProvider);
+    ref.invalidate(power24hProvider);
+    ref.invalidate(energyProvider);
+    ref.invalidate(alertsProvider);
+    messenger.showSnackBar(const SnackBar(content: Text('Usage data reset. Counting starts again from now.')));
   }
 
   Future<void> _rename(BuildContext context, WidgetRef ref, Meter meter) async {
@@ -267,6 +299,62 @@ class _Row extends StatelessWidget {
       title: Text(title, style: t.bodyLarge?.copyWith(color: danger ? C.criticalText : C.text)),
       subtitle: value == null || value!.isEmpty ? null : Text(value!, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: onTap != null && !danger ? const Icon(Icons.chevron_right_rounded, color: C.text3) : null,
+    );
+  }
+}
+
+/// "Reset usage data?" with what goes and what stays. The Reset button only
+/// works once "I understand" is ticked: this can't be undone.
+class _ResetDialog extends StatefulWidget {
+  const _ResetDialog({required this.meterName});
+  final String meterName;
+
+  @override
+  State<_ResetDialog> createState() => _ResetDialogState();
+}
+
+class _ResetDialogState extends State<_ResetDialog> {
+  bool _sure = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    Widget line(IconData icon, Color color, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: S.sm),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: S.sm),
+            Expanded(child: Text(text, style: t.bodyMedium?.copyWith(color: C.text2))),
+          ]),
+        );
+    return AlertDialog(
+      backgroundColor: C.surface,
+      title: Text('Reset "${widget.meterName}"?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          line(Icons.delete_outline_rounded, C.criticalText, 'Deleted: the bill so far, all energy history, the charts and the alerts.'),
+          line(Icons.check_rounded, C.goodText, 'Kept: the meter, its name, price, voltage range, WiFi and sharing.'),
+          const SizedBox(height: S.xs),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => setState(() => _sure = !_sure),
+            child: Row(children: [
+              Checkbox(value: _sure, onChanged: (v) => setState(() => _sure = v ?? false)),
+              Expanded(child: Text('I understand this can\'t be undone', style: t.bodyMedium)),
+            ]),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        TextButton(
+          onPressed: _sure ? () => Navigator.pop(context, true) : null,
+          style: TextButton.styleFrom(foregroundColor: C.criticalText),
+          child: const Text('Reset'),
+        ),
+      ],
     );
   }
 }
