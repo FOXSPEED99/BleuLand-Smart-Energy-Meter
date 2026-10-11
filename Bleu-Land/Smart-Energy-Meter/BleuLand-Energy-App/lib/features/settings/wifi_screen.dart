@@ -92,7 +92,7 @@ class _WifiScreenState extends ConsumerState<WifiScreen> {
       return;
     }
     code = MeterCode(bleName: _bleName(m), pop: pop);
-    await _connect(findFor: Duration(seconds: online ? 75 : 20));
+    await _connect(findFor: Duration(seconds: online ? 75 : 45));
   }
 
   Future<void> _connect({Duration findFor = const Duration(seconds: 20)}) async {
@@ -280,7 +280,7 @@ class _WifiScreenState extends ConsumerState<WifiScreen> {
                   return;
                 }
                 code = c;
-                _connect(findFor: Duration(seconds: wasOnline ? 75 : 20));
+                _connect(findFor: Duration(seconds: wasOnline ? 75 : 45));
               },
               child: const Text('Continue'),
             ),
