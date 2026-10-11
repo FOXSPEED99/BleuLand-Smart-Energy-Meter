@@ -22,6 +22,10 @@ enum class TimeSource : uint8_t { None, Rtc, Ntp };
 namespace app {
 LiveSnapshot snapshot();
 
+// Lowest and highest 1-s voltage since the last call (with mains present).
+// Returns false if there was none.
+bool takeVoltRange(float& vMin, float& vMax);
+
 time_t now();  // Unix time UTC, 0 if unknown
 TimeSource timeSource();
 const char* timeSourceName();

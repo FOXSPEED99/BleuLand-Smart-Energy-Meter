@@ -5,7 +5,7 @@
 #include "board.h"
 
 #ifndef SEM1_FW_VERSION
-#define SEM1_FW_VERSION "0.1.0"
+#define SEM1_FW_VERSION "0.4.4"
 #endif
 
 // ---------- current transformer + burden (R14) ----------
@@ -15,6 +15,13 @@
 // The values for each board are in board.h:
 //   SEM1_CT_TURNS, SEM1_CT_INT_BURDEN (ohms inside the CT, 0 = current-output CT),
 //   SEM1_R14_OHMS
+
+// No-load cutoff: below this the current input only picks up noise. Measured
+// on the prototype (Oct 2026): up to ~20 W with the clamp around nothing or
+// unplugged, so anything under 25 W reads as 0 W and adds no energy. Noise
+// spikes reach 25-28 W for a single second, so a load must also last 3 s
+// (Meter::kLoadConfirmS) before it shows.
+constexpr float NO_LOAD_W = 25.0f;
 
 // Voltage: 4 x 47k = 188k into ZMPT101B (2 mA:2 mA), 100 R burden -> same
 // ratio as the datasheet's 1.88 M / 1 k divider.
@@ -31,7 +38,13 @@ constexpr float KI = 0.001f / (burdenOhms() / SEM1_CT_TURNS);
 constexpr uint32_t LOG_INTERVAL_S = 300;          // one history record every 5 minutes
 constexpr uint32_t ENERGY_BACKUP_MS = 10000;      // energy total -> DS1307 RAM
 constexpr uint32_t ENERGY_NVS_BACKUP_MS = 900000; // fallback when no RTC: every 15 min
-constexpr uint32_t BUTTON_WIFI_RESET_MS = 5000;   // hold: forget WiFi, start setup
+constexpr uint32_t BUTTON_WIFI_RESET_MS = 5000;   // hold: open WiFi setup (the current WiFi is kept until a new one works)
+// WiFi setup window: phone setup over Bluetooth while the working WiFi is kept
+// as a backup and put back if nothing changes.
+constexpr uint32_t WIFI_SETUP_USER_MS = 10UL * 60 * 1000;  // opened from the button or the app
+constexpr uint32_t WIFI_SETUP_AUTO_MS = 30UL * 60 * 1000;  // opened because the WiFi was unreachable (it keeps
+                                                           // trying that WiFi every 30 s and goes back when it works)
+constexpr uint32_t WIFI_RESCUE_AFTER_MS = 2UL * 60 * 1000; // that long without the saved WiFi
 constexpr uint32_t BUTTON_FACTORY_RESET_MS = 15000;  // hold: also forget owner/settings
 
 // Anything before this is treated as "clock not set" (2024-01-01).
@@ -43,5 +56,6 @@ constexpr uint32_t MIN_VALID_UNIX = 1704067200;
 #define CLOUD_URL "https://rmgzpxwpowwzqewmiyaw.supabase.co"
 #define CLOUD_KEY "sb_publishable_2_MDRTqxogkVNA97djRs3Q_J3PrFZ7_"
 constexpr uint32_t CLOUD_LIVE_S = 10;          // live values every 10 s
+constexpr uint32_t CLOUD_FAST_S = 2;           // ... every 2 s while someone has the app open
 constexpr size_t CLOUD_BATCH = 48;             // history records per upload (4 h)
 constexpr uint32_t CLOUD_RETRY_MAX_S = 300;    // back-off limit when the cloud is down

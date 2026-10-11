@@ -12,34 +12,64 @@ The firmware picks the right pins and CT values from the board you select; you d
 
 ## What it does (stage 1)
 
-- **Reads the HLW8032.** Packets are found with a sliding window and the checksum, as in the test firmware. Values are averaged every second, and the "no load → I = 0" rule is kept.
+- **Reads the HLW8032.** Packets are found with a sliding window and the checksum, as in the test firmware. Values are averaged every second, and the "no load → I = 0" rule is kept. **No-load cutoff (0.4.1):** a 1-second power under 25 W is noise on the current input (measured up to ~20 W with the clamp around nothing), so it reads as 0 W / 0 A and adds no energy; a load must also stay above 25 W for 3 seconds in a row before it shows (0.4.2; noise makes single-second spikes of 25-28 W), and the energy of those 3 seconds is then counted; once a load is seen it stays on down to 20 W so it doesn't flicker (`NO_LOAD_W` in config.h).
 - **Energy counter.** The lifetime kWh total never goes backwards and survives power cuts:
   - it's saved every 10 s in the DS1307's battery-backed RAM, which doesn't wear out;
   - and every 5 minutes in the history log.
   - It's calculated from P × dt, the method proven on your bench. The HLW8032's own PF pulse counter is calculated alongside it, so you can compare both against a reference meter. Switch with `energy pf`.
-- **5-minute history in flash ("offline buffer").** About **22 days** of records: time, kWh counter, average power, peak power and voltage. When the cloud part is added, the meter uploads these, so no data is lost while the internet is down. Even during a longer outage the kWh total stays correct; only the oldest 5-minute detail is overwritten.
+- **5-minute history in flash ("offline buffer").** About **11 days** of records: time, kWh counter, average power, peak power and voltage. When the cloud part is added, the meter uploads these, so no data is lost while the internet is down. Even during a longer outage the kWh total stays correct; only the oldest 5-minute detail is overwritten.
 - **Clock.** Gets the time from the internet (NTP) when online and keeps the DS1307 correct. After a power cut with no internet, the DS1307 provides the time. Everything is stored in **UTC**, and the app converts to local time.
 - **WiFi setup from the phone over Bluetooth.** Nothing is hard-coded and there's no always-on access point, so the AP+STA freeze from the test firmware can't happen.
 - **LEDs as printed on the label:**
   - **ENERGY** (white): one flash per Wh, i.e. 1000 imp/kWh.
   - **WiFi** (blue): link / setup status.
 - **Button:**
-  - hold 5 s = forget WiFi and go back to phone setup;
+  - hold 5 s = open phone setup to change the WiFi (the current WiFi is kept until a new one works);
   - hold 15 s = also forget the owner.
 - **Local web page and JSON API** on your home network, for the app, Home Assistant, and calibration on the bench.
 - **Metering in its own high-priority task.** Network work can never make it miss packets. A watchdog restarts the meter if it ever hangs.
 
 - **Cloud link (stage 2).**
-  - Once online, the meter registers with the BleuLand Energy cloud (Supabase, Frankfurt) and sends live values every 10 s over HTTPS.
+  - Once online, the meter registers with the BleuLand Energy cloud (Supabase, Frankfurt) and sends live values every 10 s over HTTPS, or every 2 s while someone has the app open. Each upload also carries the lowest and highest 1-second voltage since the previous one, so short dips and spikes are caught.
   - It then uploads the 5-minute history it stored while offline, oldest first, until it has caught up.
   - It only trusts the cloud's real certificates; the list is in `cloud_certs.h`.
   - The cloud work runs in its own background task, so a slow connection never freezes anything else.
   - Status shows on the web page, in `info`, and on the blue LED.
 
+- **Changing the WiFi (from 0.4.0).** Three ways into phone setup, all keeping the current WiFi as a backup that comes back if no new one is set up in time:
+  - the app (**Settings → WiFi → Change WiFi network**) while the meter is online: the cloud tells it to restart into setup (10 minutes);
+  - automatically, after **2 minutes without its WiFi** (password changed, new router): setup opens for up to 30 minutes while the meter keeps trying the old WiFi every 30 s, and it goes straight back to it as soon as it works (router switched on again);
+  - holding the button 5 s (10 minutes).
+  A power cut in the middle of setup is safe too: the old WiFi is put back at the next start.
+- **Updates over WiFi (from 0.3.0).** The owner taps *Update* in the app; see below.
+
 Coming next:
 
-- OTA updates from the cloud
 - MQTT / Home Assistant
+
+## Updates over WiFi
+
+Flash **0.3.0 or newer by USB once**; after that, new firmware arrives over WiFi.
+
+How a new version reaches a meter:
+
+1. A firmware change is pushed to GitHub. The **"Firmware: build & publish"** action builds it for the DevKit and the C3 and uploads it to the cloud:
+   - from `main`: **stable**, offered to every meter;
+   - from any other branch: **beta** (test builds), offered only to meters on the beta channel (yours is).
+   A version number is published once, so each release raises `SEM1_FW_VERSION` in `config.h`.
+2. The app shows **Settings → Firmware → "Version x available"**. Only the owner can tap **Update now**; nothing installs by itself.
+3. The meter downloads the file into its **spare program slot** while it keeps measuring, checks its size and MD5, then restarts into it (about a minute).
+4. The new version is **on probation** until it reaches the cloud. If it crashes, or can't reach the cloud within 10 minutes, the chip **goes back to the previous version by itself** and the app says the update didn't finish.
+
+The Serial Monitor shows each step (`[ota] ...`); the `ota` command shows which slot is running.
+
+### One-time setup: let GitHub publish firmware
+
+GitHub needs a key to upload firmware to Supabase. Until it has one, the action still builds the files (Actions → run → Artifacts) but doesn't publish them.
+
+1. Supabase dashboard → project **bleuland-energy** → **Project Settings → API Keys** → **Secret keys** → **+ New secret key**. Name it `github-firmware` and copy it (it starts with `sb_secret_`).
+2. GitHub → this repository → **Settings → Secrets and variables → Actions** → **New repository secret**. Name: `SUPABASE_SECRET_KEY`, value: the key. Save.
+3. Never paste this key anywhere else (chat, code, e-mail): it has full access to the database. If it leaks, delete it in Supabase and make a new one.
 
 ## Arduino IDE setup (one time)
 
@@ -61,10 +91,12 @@ Your old test firmware builds on 3.x as well.
    - The `.ino` only has `setup()` and `loop()`; they call `sem1Setup()` / `sem1Loop()` in `main.cpp`, where the real start-up code is.
 2. In the **Tools** menu set:
    - **Board:** "ESP32 Dev Module" (under esp32)
-   - **Partition Scheme:** "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+   - **Partition Scheme:** "No FS 4MB (2MB APP x2)"
    - **Port:** your DevKit's COM port
 
-   Why the Partition Scheme matters: the firmware is about 1.5–1.8 MB, which doesn't fit the default 1.2 MB limit. Our own `partitions.csv` in the sketch folder is what gets flashed (the IDE picks it up automatically), and its app slots are the same size as "Minimal SPIFFS", so the IDE's size check is exact.
+   Why the Partition Scheme matters: the firmware is about 1.5–1.95 MB, which doesn't fit the default 1.2 MB limit. Our own `partitions.csv` in the sketch folder is what gets flashed (the IDE picks it up automatically), and its app slots are the same size as "No FS 4MB (2MB APP x2)", so the IDE's size check is exact.
+   - On the old 2.0.17 board package that option is missing for the DevKit: pick "Huge APP (3MB No OTA/1MB SPIFFS)" instead. The firmware fits either way.
+   - If you see **"Sketch too big" / "text section exceeds available space"**, the Partition Scheme is still on an older choice such as "Minimal SPIFFS". Change it and upload again.
 3. Click **Upload (→)**.
    - The first compile takes a few minutes; after that it's faster.
    - If the upload doesn't start, hold the DevKit's BOOT button while it says "Connecting…".
@@ -103,7 +135,7 @@ Our own app will do this later. Until then, Espressif's free test app speaks the
    2. Open `https://espressif.github.io/esp-jumpstart/qrcode.html?data=` and paste the payload after the `=`.
 3. In the app: **Provision New Device → scan the QR** on your PC screen.
 4. Pick your home WiFi and type its password. The blue LED blinks fast while it connects, then stays on.
-5. The serial monitor prints the meter's address, e.g. `http://192.168.1.57 (http://sem1-a1b2c3.local)`. Open it in a browser on the same WiFi to see live values.
+5. The serial monitor prints the meter's address, e.g. `http://192.168.1.57`. Open it in a browser on the same WiFi to see live values.
 
 The QR payload is fixed for each unit; it's created on the unit's first boot. In production, it's what gets printed on the front label's "SCAN TO PAIR" code.
 
@@ -113,7 +145,7 @@ The QR payload is fixed for each unit; it's created on the unit's first boot. In
 
 **The app finds nothing?**
 - Check that the blue LED blinks **slowly** and the serial monitor shows `[net] setup mode: BLE name SEM1_...`.
-- If it says `connecting to saved WiFi` instead, the meter already has a network saved: type `wifi-reset` (or hold BOOT 5 s) to start setup again.
+- If it says `connecting to saved WiFi` instead, the meter already has a network saved: type `wifi-setup` (or hold the button 5 s) to set up a different one.
 - WiFi details left behind by other firmware, such as the test sketch, are ignored automatically.
 - On Android, Bluetooth **and** Location must be on to scan.
 
@@ -125,7 +157,7 @@ The QR payload is fixed for each unit; it's created on the unit's first boot. In
 | fast blink | connecting to the home WiFi |
 | on | connected |
 | on, with a short off-blink every 2 s | on WiFi, but the cloud can't be reached |
-| very fast flicker | button held ≥ 5 s: release now to reset WiFi |
+| very fast flicker | button held ≥ 5 s: release now to open WiFi setup |
 | on + ENERGY on | button held ≥ 15 s: release now for a factory reset |
 
 ENERGY LED (white): one short flash per watt-hour (1000 imp/kWh), like a utility meter.
@@ -154,6 +186,8 @@ cal reset             back to 1.0 / 1.0 / 1.0
 energy int|pf         energy from P x dt (default) or the PF pulse counter
 time <unix>           set the clock by hand (UTC)
 log [n]               last n history records
+ota                   firmware slots and update state
+wifi-setup            phone setup for a new WiFi (keeps the current one until it works)
 wifi-reset            forget WiFi, restart into phone setup
 factory-reset         also forget the owner
 reboot
@@ -178,7 +212,7 @@ The decoder, energy maths and flash log (including power cuts in the middle of a
 ```
 SEM1_Firmware/                    the Arduino sketch: every file below opens as a tab
   SEM1_Firmware.ino   setup() / loop(): open this one
-  partitions.csv      flash layout: 2 x 1.875 MB app slots (for safe OTA) + 128 KB history log + crash dump
+  partitions.csv      flash layout: 2 x 1.94 MB app slots (for safe updates) + 64 KB history log
   main.cpp            sem1Setup()/sem1Loop(): start-up, metering task, clock, history log, button
   board.h             pin maps + CT values for both boards
   config.h            timings and front-end coefficients
@@ -189,9 +223,11 @@ SEM1_Firmware/                    the Arduino sketch: every file below opens as 
   local_api.cpp       web page + JSON API
   rtc_ds1307.cpp      clock + energy backup in RTC RAM
   settings.cpp        calibration, identity (device ID, QR code, cloud secret)
+  ota.cpp             updates over WiFi: download, check, probation, rollback
   console.cpp         serial commands
   leds.cpp            LED patterns
 test/               PC unit tests
+tools/publish.sh    used by GitHub Actions to publish a build for updates over WiFi
 ```
 
 ## For the production PCB (ESP32-C3), hardware requests
@@ -216,16 +252,18 @@ test/               PC unit tests
 
 ## Size budget
 
-Each app slot is 1.875 MB (the IDE's "Maximum is 1966080 bytes").
+Each app slot holds 2,031,616 bytes (the IDE's "Maximum is 2031616 bytes"). To make room for the HTTPS cloud link, the slots were enlarged by 64 KB each: the crash-report (coredump) area was dropped, and the offline history shrank from 22 to 11 days. Because of that, the core may print one harmless `No core dump partition found` line at boot. The `.local` network name (mDNS, ~37 KB) was also removed; use the IP address the Serial Monitor prints.
 
 | Board package | ESP32-C3 (production) | DevKit (prototype) |
 |---|---|---|
-| 3.3.12 | 1.61 MB (82%) | 1.96 MB (**99.5%**) |
-| 3.3.4 | 1.55 MB (79%) | 1.94 MB (98.6%) |
-| 2.0.17 | 1.70 MB (86%) | 1.82 MB (92%) |
+| 3.3.12 | 1.60 MB (78%) | 1.95 MB (95%) |
+| 3.3.4 | 1.54 MB (76%) | 1.93 MB (95%) |
+| 2.0.17 | 1.69 MB (83%) | 1.81 MB (89%) |
+
+(0.3.0, with updates over WiFi. GitHub builds with 3.3.12.)
 
 - **The production C3 has room** for the next features: over-the-air updates, MQTT.
-- **The classic-ESP32 DevKit is nearly full on core 3.x.** Its Bluetooth stack is about 0.8 MB, and the HTTPS cloud link added about 130 KB.
+- **The classic-ESP32 DevKit is close to full on core 3.x.** Its Bluetooth stack is about 0.8 MB, and the HTTPS cloud link added about 130 KB.
 - For further development, use an **ESP32-C3 DevKit**. It's cheap, and it's the chip the product ships with.
 - Most of this is the Bluetooth stack used for WiFi setup.
 - The cloud features of stage 2 should still fit on the C3. The DevKit is only for development.

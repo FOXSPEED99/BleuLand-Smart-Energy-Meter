@@ -73,7 +73,7 @@ PF = P / S
   - `KI = 0.001 / (R_burden / CT_turns)`, because the HLW8032 coefficient is 1.0 for a 1 mΩ shunt.
   - Prototype: SCT-013-030 (30 A/1 V, 1800 turns, about 62 Ω internal burden) with R14 = 0.44 Ω → **KI ≈ 4.12**.
   - Production: SCT-013-000 (100 A:50 mA, 2000 turns), R14 = 0.5 Ω → **KI = 4.0**, full scale about 87 A.
-- **Noise floor** is about 0.2 A of fake current with no load. If the power register overflows (no real power), report I = 0.
+- **Noise floor** is about 0.2 A of fake current with no load. If the power register overflows (no real power), report I = 0. Fox measured up to ~20 W of fake power with the clamp around nothing (Oct 2026), so firmware 0.4.1 reads anything under 25 W as 0 W / 0 A and counts no energy (stays on down to 20 W once a load is seen; `NO_LOAD_W` in config.h). Single-second noise spikes of 25-28 W still got through, so 0.4.2 also needs 3 s in a row above 25 W before a load shows, then counts those 3 s. 0.4.1 was the first update over WiFi (10 Oct 2026, done, no rollback). Loads under ~25 W alone can't be measured with this CT and board.
 - **Energy:** the test firmware integrates P·dt. For production, consider the PF pulse counter. The commonly used formula is pulses per kWh = 1e9 × 3600 / (PowPar × KV × KI). Verify it against the datasheet.
 - **Direction:** the HLW8032 is assumed to give power **magnitude only** (no import/export sign). Verify before promising any solar or export features.
 
@@ -129,14 +129,14 @@ Fox chose (Oct 2026):
 - **Market:** **Syria** first (not the Gulf): currency SYP, time zone Asia/Damascus, tariff brackets entered by the user (no guessed prices). App **English only** for now. App name **BleuLand Energy**, **dark theme only**.
 - **Scope (Fox):** the meter measures the whole house's consumption from the city grid, i.e. what's on the electricity bill. No generator/solar features.
 - **App:** Flutter (Android, iOS, web, desktop from one codebase).
-- **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **3.x** (tested 3.3.12; Fox has 3.x; 2.0.17 also compiles via the `ESP_ARDUINO_VERSION_MAJOR` shims in net.cpp; verified builds on 2.0.17, 3.3.4, 3.3.12). net.cpp defines `extern "C" bool btInUse(){return true;}` (plus `esp32-hal-alloc-ble-mem.h` only when it exists, 3.3.9+) so no core version frees BLE memory at boot; without it the 2.0.17 DevKit build linked the core's weak `false` version and BLE setup would have failed, + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino` (only setup()/loop() calling sem1Setup()/sem1Loop() in main.cpp); all code files sit flat in the sketch folder so Fox sees them as IDE tabs (keep it that way); board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically; its app slots (2 x 0x1E0000) equal "Minimal SPIFFS" so the IDE size check is exact. Sizes on 3.3.12: C3 1.47 MB, DevKit 1.83 MB of 1.875 MB (tight: watch it in stage 2). PC tests: `sh test/run_tests.sh`.
+- **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **3.x** (tested 3.3.12; Fox has 3.x; 2.0.17 also compiles via the `ESP_ARDUINO_VERSION_MAJOR` shims in net.cpp; verified builds on 2.0.17, 3.3.4, 3.3.12). net.cpp defines `extern "C" bool btInUse(){return true;}` (plus `esp32-hal-alloc-ble-mem.h` only when it exists, 3.3.9+) so no core version frees BLE memory at boot; without it the 2.0.17 DevKit build linked the core's weak `false` version and BLE setup would have failed, + ArduinoJson 7.x. Sketch: `../SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino` (only setup()/loop() calling sem1Setup()/sem1Loop() in main.cpp); all code files sit flat in the sketch folder so Fox sees them as IDE tabs (keep it that way); board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically; its app slots (2 x 0x1F0000) equal the IDE's "No FS 4MB (2MB APP x2)" scheme (Fox must select it) so the IDE size check is exact; no coredump partition (dropped for room) and no mDNS (removed, ~37 KB). Stage 2 overflowed "Minimal SPIFFS" on Fox's 3.x core (1,985,389 > 1,966,080), hence this layout. Sizes on 3.3.12: C3 1.57 MB (77%), DevKit 1.92 MB (94%) of 2,031,616 bytes. PC tests: `sh test/run_tests.sh`.
 - **Order:** firmware first, then cloud, then app.
 
 Firmware stage 1 is done (see `../SEM1-Firmware/README.md`):
 
 - metering task
 - energy counter backed up in DS1307 RAM
-- 5-min history ring in a raw flash partition (128 KB, ~22 days)
+- 5-min history ring in a raw flash partition (64 KB, ~11 days)
 - NTP + RTC clock (UTC)
 - ESP BLE provisioning (security 1, PoP from the QR) with the `sem1-claim` endpoint for account linking
 - LEDs per the front label: white = ENERGY 1000 imp/kWh, blue = WiFi
@@ -154,8 +154,9 @@ Next stages:
 
 1. Supabase schema + device ingest (device authenticates with its per-unit secret, records keyed by device + timestamp) + upload of the flash log.
 2. Flutter app with BLE onboarding (QR → WiFi → claim code), live view, history, tariff/cost, alerts, sharing.
-3. OTA from the cloud.
-4. MQTT / Home Assistant.
+3. ~~OTA from the cloud~~ done (fw 0.3.0): GitHub Actions `firmware.yml` builds both boards with core 3.3.12 and publishes via `SEM1-Firmware/tools/publish.sh` (needs repo secret `SUPABASE_SECRET_KEY`; main → stable, other branches → beta; a version is published once, so bump `SEM1_FW_VERSION`). Owner taps Update in the app (`request_update`); `device_push` returns `ota`; meter downloads into the spare slot (Update lib + MD5), reports via `device_ota`, restarts; `verifyRollbackLater()` keeps it on probation until cloud hello succeeds (10-min timeout → bootloader rollback). Fox chose: updates only when the owner taps, also for his own (beta-channel) meter.
+4. ~~Changing the WiFi~~ done (fw 0.4.0): "setup window" = restart into the normal BLE provisioning with the working WiFi backed up in NVS (`wbs`/`wbp`) and restored if no new WiFi succeeds in time or the power fails mid-window. Opened by the app (`request_wifi_setup` → `device_push` returns `wifi_setup`), by 2 min without the saved WiFi (auto, 4-min window, repeats), or the button held 5 s / console `wifi-setup` (10 min). App: Settings → WiFi (`wifi_screen.dart`), "Changed your WiFi?" on the offline Home card; BLE code from `get_setup_code` (stored at claim; Fox's stored) or typed once. Shared BLE pieces: `MeterLink` in ble_setup.dart, `setup_widgets.dart`.
+5. MQTT / Home Assistant.
 
 Open hardware items for the C3 PCB:
 

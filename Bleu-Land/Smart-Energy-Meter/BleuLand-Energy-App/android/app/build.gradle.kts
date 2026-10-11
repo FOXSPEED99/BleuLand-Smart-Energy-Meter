@@ -29,11 +29,28 @@ android {
         versionName = flutter.versionName
     }
 
+    // Every APK must carry the same signature, or Android refuses to install
+    // it over the previous one. CI puts the permanent key (GitHub secrets
+    // ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD) in a file and passes
+    // its path here. Without it (a local build) the debug key is used.
+    val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+    val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    val hasUploadKey = !keystorePath.isNullOrEmpty() && !keystorePassword.isNullOrEmpty()
+
+    signingConfigs {
+        if (hasUploadKey) {
+            create("upload") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = "upload"
+                keyPassword = keystorePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasUploadKey) "upload" else "debug")
         }
     }
 }

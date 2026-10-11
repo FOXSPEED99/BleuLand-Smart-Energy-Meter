@@ -31,6 +31,7 @@ struct HlwSample {
   uint8_t state = 0;        // raw state byte
   bool chipError = false;   // state 0xAA: values are unusable
   bool vOvf = false, iOvf = false, pOvf = false;
+  bool glitch = false;      // a misread register was replaced (see Hlw8032::decode)
   float v = 0, i = 0, p = 0;  // volts, amps, watts (already calibrated)
   // Energy from the chip's own PF pulse counter since the previous packet.
   // 0 for the very first packet (no previous count to compare against).
@@ -51,6 +52,14 @@ class Hlw8032 {
 
   uint32_t goodPackets() const { return good_; }
   uint32_t badPackets() const { return bad_; }
+  uint32_t glitches() const { return glitches_; }  // misread values replaced
+
+  // Impossible values for this meter: anything above is a misread register.
+  static constexpr float kMaxV = 400.0f, kMaxA = 120.0f, kMaxW = 30000.0f;
+  // Misread power is replaced by the last good value for at most this many
+  // packets in a row (~0.5 s); after that the reading is trusted again, so a
+  // badly calibrated meter shows its own value instead of freezing.
+  static constexpr uint8_t kMaxHeld = 9;
   const uint8_t* lastPacket() const { return last_; }
   bool hasPacket() const { return good_ > 0; }
 
@@ -67,6 +76,9 @@ class Hlw8032 {
   uint32_t good_ = 0, bad_ = 0;
   bool havePf_ = false;
   uint16_t lastPf_ = 0;
+  float lastV_ = 0, lastI_ = 0, lastP_ = 0;  // last good values
+  uint8_t held_ = 0;
+  uint32_t glitches_ = 0;
 };
 
 }  // namespace sem1

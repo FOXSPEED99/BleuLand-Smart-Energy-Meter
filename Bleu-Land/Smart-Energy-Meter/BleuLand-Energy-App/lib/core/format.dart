@@ -47,3 +47,16 @@ String fmtAgo(DateTime t, {DateTime? now}) {
   if (d.inDays < 1) return '${d.inHours} h ago';
   return DateFormat('d MMM').format(t);
 }
+
+/// Spelled out, for places with room: "just now", "1 minute ago",
+/// "5 hours ago", "yesterday", "3 days ago", "on 12 Oct".
+String fmtAgoLong(DateTime t, {DateTime? now}) {
+  final d = (now ?? DateTime.now()).difference(t);
+  String n(int v, String unit) => '$v $unit${v == 1 ? '' : 's'} ago';
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inHours < 1) return n(d.inMinutes, 'minute');
+  if (d.inDays < 1) return n(d.inHours, 'hour');
+  if (d.inDays == 1) return 'yesterday';
+  if (d.inDays < 7) return n(d.inDays, 'day');
+  return 'on ${DateFormat('d MMM').format(t)}';
+}

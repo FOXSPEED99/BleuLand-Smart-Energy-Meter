@@ -15,11 +15,11 @@ class DemoRepository implements EnergyRepository {
   @override
   bool get isDemo => true;
 
-  Meter _meter = const Meter(
+  Meter _meter = Meter(
     id: 'SEM1-DE0001',
     name: 'Demo home',
     role: 'owner',
-    fw: '0.1.0',
+    fw: '0.2.0',
     alertPowerW: 2500,
   );
   final List<Invite> _invites = [];
@@ -67,11 +67,25 @@ class DemoRepository implements EnergyRepository {
   @override
   Future<List<Meter>> meters() async => [_meter];
 
+  /// Mains voltage: Syrian grids sag in the evening peak and run high late at night.
+  static double _baseVolts(DateTime t) {
+    final h = t.hour + t.minute / 60;
+    return 216 + 7 * cos((h - 3) / 24 * 2 * pi) - (h >= 18 && h < 22 ? 9 : 0);
+  }
+
   @override
   Stream<LiveReading?> live(String meterId) async* {
     final rnd = Random();
     var w = _hourWatts(DateTime.now());
     double total = 1284.6;
+    final start = DateTime.now();
+    // today so far: plausible lowest/highest before the app was opened
+    var vMin = min(_baseVolts(start) - 4, 203.4);
+    var vMax = max(_baseVolts(start) + 3, 224.8);
+    DateTime? vMinAt = DateTime(start.year, start.month, start.day, min(start.hour, 19), 42);
+    DateTime? vMaxAt = DateTime(start.year, start.month, start.day, min(start.hour, 3), 15);
+    if (vMinAt.isAfter(start)) vMinAt = start;
+    if (vMaxAt.isAfter(start)) vMaxAt = start;
     while (true) {
       final now = DateTime.now();
       final target = _hourWatts(now);
@@ -80,7 +94,9 @@ class DemoRepository implements EnergyRepository {
       if (target > 0 && rnd.nextDouble() < 0.06) w += 1200 + rnd.nextDouble() * 900; // kettle / heater
       w = max(0, w);
       total += w * 2 / 3600000;
-      final volts = target == 0 ? 0.0 : 221 + rnd.nextDouble() * 8;
+      final volts = target == 0 ? 0.0 : _baseVolts(now) + (rnd.nextDouble() - 0.5) * 3 - (w > 1500 ? 4 : 0);
+      if (volts > 0 && volts < vMin) (vMin, vMinAt) = (volts, now);
+      if (volts > vMax) (vMax, vMaxAt) = (volts, now);
       final pf = w > 0 ? 0.86 + rnd.nextDouble() * 0.1 : 0.0;
       yield LiveReading(
         ts: now,
@@ -90,10 +106,22 @@ class DemoRepository implements EnergyRepository {
         pf: pf,
         kwhTotal: total,
         rssi: -55 - rnd.nextInt(10),
+        ssid: 'Home-WiFi',
+        day: DateTime(now.year, now.month, now.day),
+        dayVmin: vMin,
+        dayVminAt: vMinAt,
+        dayVmax: vMax,
+        dayVmaxAt: vMaxAt,
       );
       await Future<void>.delayed(const Duration(seconds: 2));
     }
   }
+
+  @override
+  Future<void> watch(String meterId) async {}
+
+  @override
+  Future<void> checkReach() async {}
 
   @override
   Future<List<EnergyPoint>> energy(String meterId, DateTime from, DateTime to, Bucket bucket) async {
@@ -138,6 +166,13 @@ class DemoRepository implements EnergyRepository {
     final y = now.subtract(const Duration(days: 1));
     return [
       AlertItem(
+        id: 4,
+        kind: AlertKind.voltLow,
+        value: 194.6,
+        createdAt: DateTime(y.year, y.month, y.day, 20, 5),
+        resolvedAt: DateTime(y.year, y.month, y.day, 20, 31),
+      ),
+      AlertItem(
         id: 3,
         kind: AlertKind.highPower,
         value: 3120,
@@ -158,6 +193,52 @@ class DemoRepository implements EnergyRepository {
 
   @override
   Future<ClaimResult> claim(String meterId, String pop, String name) async => ClaimResult.ok;
+
+  @override
+  Future<bool> requestWifiSetup(String meterId) async => true;
+
+  @override
+  Future<String?> setupCode(String meterId) async => null;
+
+  // Firmware: a pretend update that runs through every stage in ~25 s.
+  String get _fw => _meter.fw ?? '0.2.0';
+  DateTime? _updateStarted;
+
+  @override
+  Future<FirmwareStatus> firmware(String meterId) async {
+    const next = FirmwareRelease(
+      version: '0.3.0',
+      notes: 'Updates over WiFi, voltage alerts, faster live values',
+      size: 1946288,
+    );
+    final s = _updateStarted;
+    if (s == null) return FirmwareStatus(current: _fw, latest: _fw == next.version ? null : next);
+    final t = DateTime.now().difference(s).inSeconds;
+    final stage = t < 4
+        ? UpdateStage.requested
+        : t < 18
+            ? UpdateStage.downloading
+            : t < 26
+                ? UpdateStage.installing
+                : UpdateStage.done;
+    if (stage == UpdateStage.done && _meter.fw != next.version) _meter = _meter.withFw(next.version);
+    return FirmwareStatus(
+      current: _fw,
+      latest: stage == UpdateStage.done ? null : next,
+      stage: stage,
+      target: next.version,
+      stageAt: s,
+    );
+  }
+
+  @override
+  Future<UpdateRequest> requestUpdate(String meterId) async {
+    _updateStarted = DateTime.now();
+    return UpdateRequest.ok;
+  }
+
+  @override
+  Future<void> cancelUpdate(String meterId) async => _updateStarted = null;
 
   @override
   Future<List<Invite>> invites(String meterId) async => List.of(_invites);

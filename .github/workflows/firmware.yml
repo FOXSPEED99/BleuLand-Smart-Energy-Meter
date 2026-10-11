@@ -1,0 +1,73 @@
+# Builds the SEM-1 firmware for both boards on every firmware change, and
+# publishes it for updates over WiFi:
+#   - from main            -> "stable" (all meters can install it)
+#   - from any other branch -> "beta" (only meters on the beta channel)
+# Meters only install when their owner taps "Update" in the app.
+# The .bin files are also kept under Actions -> run -> Artifacts.
+name: "Firmware: build & publish"
+
+on:
+  push:
+    paths:
+      - "Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/**"
+      - ".github/workflows/firmware.yml"
+  workflow_dispatch:
+
+env:
+  CORE: "esp32:esp32@3.3.12"
+  INDEX: "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+  SKETCH: "Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/SEM1_Firmware"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50  # the release note is the last firmware commit's title
+
+      - name: Unit tests (metering core)
+        run: sh Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/test/run_tests.sh
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.arduino15
+          key: arduino-${{ env.CORE }}-json7
+
+      - name: Install board package and ArduinoJson
+        run: |
+          arduino-cli core update-index --additional-urls "$INDEX"
+          arduino-cli core install "$CORE" --additional-urls "$INDEX"
+          arduino-cli lib install "ArduinoJson@7.2.1"
+
+      - name: Build prototype (ESP32 DevKit)
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=no_fs \
+            --warnings default --output-dir out/devkit "$SKETCH"
+
+      - name: Build production (ESP32-C3)
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=no_fs,CDCOnBoot=cdc,FlashMode=dio \
+            --warnings default --output-dir out/c3 "$SKETCH"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SEM1-firmware
+          path: |
+            out/devkit/SEM1_Firmware.ino.bin
+            out/devkit/SEM1_Firmware.ino.merged.bin
+            out/c3/SEM1_Firmware.ino.bin
+            out/c3/SEM1_Firmware.ino.merged.bin
+          retention-days: 30
+
+      - name: Publish for updates over WiFi
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          CHANNEL=beta
+          [ "$GITHUB_REF" = "refs/heads/main" ] && CHANNEL=stable
+          sh Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/tools/publish.sh "$CHANNEL" \
+            SEM1-proto-devkit out/devkit/SEM1_Firmware.ino.bin \
+            SEM1-C3 out/c3/SEM1_Firmware.ino.bin

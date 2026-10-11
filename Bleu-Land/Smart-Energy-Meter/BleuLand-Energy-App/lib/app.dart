@@ -11,9 +11,11 @@ import 'features/auth/welcome_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/add_meter_screen.dart';
+import 'features/settings/firmware_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/sharing_screen.dart';
 import 'features/settings/tariff_screen.dart';
+import 'features/settings/wifi_screen.dart';
 import 'theme/theme.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -41,6 +43,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/add-meter', builder: (_, _) => const AddMeterScreen()),
       GoRoute(path: '/settings/tariff', builder: (_, _) => const TariffScreen()),
+      GoRoute(path: '/settings/firmware', builder: (_, _) => const FirmwareScreen()),
+      GoRoute(path: '/settings/wifi', builder: (_, _) => const WifiScreen()),
       GoRoute(path: '/settings/sharing', builder: (_, _) => const SharingScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Shell(shell: shell),
@@ -87,7 +91,30 @@ class BleuLandApp extends ConsumerWidget {
   const BleuLandApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Wi-Fi switched off, data switched on, network back...: check right
+    // away whether the cloud can still be reached, instead of waiting for
+    // the next request to fail or succeed.
+    ref.listen(connectivityProvider, (prev, next) {
+      final r = next.value;
+      if (r == null || !hasNetwork(r)) return;
+      // at launch only when the app was last offline (it starts on saved data)
+      if (prev?.value == null && ref.read(cloudReachProvider)) return;
+      ref.read(repositoryProvider).checkReach();
+    });
+    // Back online: reload everything that was showing saved data.
+    ref.listen(phoneOfflineProvider, (prev, next) {
+      if (prev == true && !next) {
+        ref.invalidate(metersProvider);
+        ref.invalidate(liveProvider);
+        ref.invalidate(cycleProvider);
+        ref.invalidate(power24hProvider);
+        ref.invalidate(energyProvider);
+        ref.invalidate(alertsProvider);
+        ref.invalidate(firmwareProvider);
+      }
+    });
+    return MaterialApp.router(
         title: AppConfig.appName,
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
@@ -95,4 +122,5 @@ class BleuLandApp extends ConsumerWidget {
         themeMode: ThemeMode.dark,
         routerConfig: ref.watch(routerProvider),
       );
+  }
 }

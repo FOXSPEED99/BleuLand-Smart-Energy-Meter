@@ -1,5 +1,6 @@
 // App state, wired with Riverpod. Screens "watch" these and rebuild when the
 // data changes (new live reading, settings saved, meter switched...).
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
@@ -7,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
 import '../core/tariff.dart';
 import 'demo_repository.dart';
 import 'models.dart';
+import 'offline_cache.dart';
 import 'repository.dart';
 import 'supabase_repository.dart';
 
@@ -36,7 +38,71 @@ final sessionProvider = Provider<Session?>((ref) {
 
 final repositoryProvider = Provider<EnergyRepository>((ref) {
   if (ref.watch(demoModeProvider)) return DemoRepository();
-  return SupabaseRepository(Supabase.instance.client);
+  final reach = ref.read(cloudReachProvider.notifier);
+  return SupabaseRepository(
+    Supabase.instance.client,
+    OfflineCache(
+      ref.read(prefsProvider),
+      onReached: reach.reached,
+      onUnreachable: reach.unreachable,
+      isOffline: () => ref.read(phoneOfflineProvider),
+      hasNetwork: () async => hasNetwork(await Connectivity().checkConnectivity()),
+    ),
+  );
+});
+
+// ---------- is the phone online? ----------
+
+/// Wi-Fi, mobile data or cable is on. A VPN alone doesn't count: with Wi-Fi
+/// and data off, a VPN app can stay "connected" with nothing under it.
+bool hasNetwork(List<ConnectivityResult> r) =>
+    r.any((x) => x != ConnectivityResult.none && x != ConnectivityResult.vpn);
+
+/// Every change of the phone's network (Wi-Fi on/off, switched to data...).
+final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) async* {
+  final c = Connectivity();
+  yield await c.checkConnectivity();
+  yield* c.onConnectivityChanged;
+});
+
+/// The phone's own network: Wi-Fi or mobile data switched on (true) or not.
+final networkProvider = Provider<bool>((ref) {
+  final r = ref.watch(connectivityProvider).value;
+  return r == null || hasNetwork(r);
+});
+
+/// Whether the last cloud request got through. Catches Wi-Fi or data that's
+/// connected but has no internet, which the phone itself reports as online.
+/// Remembered between launches, so an app opened without internet shows the
+/// saved data at once (the first "still there?" check corrects it).
+class CloudReach extends Notifier<bool> {
+  static const _key = 'cloud_reach';
+
+  @override
+  bool build() => ref.read(prefsProvider).getBool(_key) ?? true;
+
+  void reached() => _set(true);
+  void unreachable() => _set(false);
+
+  void _set(bool v) {
+    if (state == v) return;
+    state = v;
+    ref.read(prefsProvider).setBool(_key, v);
+  }
+}
+
+final cloudReachProvider = NotifierProvider<CloudReach, bool>(CloudReach.new);
+
+/// No internet on the phone: screens show saved data and say so.
+final phoneOfflineProvider = Provider<bool>((ref) {
+  if (ref.watch(demoModeProvider)) return false;
+  return !ref.watch(networkProvider) || !ref.watch(cloudReachProvider);
+});
+
+/// When the shown cloud data was saved (for "saved at 14:32").
+final savedAtProvider = Provider<DateTime?>((ref) {
+  ref.watch(phoneOfflineProvider);
+  return OfflineCache.savedAt(ref.read(prefsProvider));
 });
 
 final metersProvider = FutureProvider<List<Meter>>((ref) async {
@@ -66,9 +132,7 @@ final currentMeterProvider = Provider<AsyncValue<Meter?>>((ref) {
   });
 });
 
-final liveProvider = StreamProvider.family<LiveReading?, String>(
-  (ref, id) => ref.watch(repositoryProvider).live(id),
-);
+final liveProvider = StreamProvider.family<LiveReading?, String>((ref, id) => ref.watch(repositoryProvider).live(id));
 
 typedef EnergyQuery = ({String id, DateTime from, DateTime to, Bucket bucket});
 
@@ -78,6 +142,10 @@ final energyProvider = FutureProvider.family<List<EnergyPoint>, EnergyQuery>(
 
 final power24hProvider = FutureProvider.family<List<PowerPoint>, String>(
   (ref, id) => ref.watch(repositoryProvider).power(id, DateTime.now().subtract(const Duration(hours: 24))),
+);
+
+final firmwareProvider = FutureProvider.family<FirmwareStatus, String>(
+  (ref, id) => ref.watch(repositoryProvider).firmware(id),
 );
 
 final alertsProvider = FutureProvider.family<List<AlertItem>, String>(

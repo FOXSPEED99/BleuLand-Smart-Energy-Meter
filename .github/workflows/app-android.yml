@@ -30,6 +30,19 @@ jobs:
           channel: stable
           cache: true
 
+      # Keep Gradle's downloads and the compiled Android parts (plugins, shrinking)
+      # between runs, so only the Dart code is rebuilt. Gradle's build cache only
+      # reuses a result when every input is identical, so the APK is the same.
+      # When the Gradle files or packages change, a fresh copy is saved under a new key.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/android/**/*.gradle.kts', 'Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/android/gradle.properties', 'Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/android/gradle/wrapper/gradle-wrapper.properties', 'Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/pubspec.lock') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Get packages
         run: flutter pub get
 
@@ -39,6 +52,20 @@ jobs:
       - name: Unit tests
         run: flutter test
 
+      # The permanent signing key, so each new APK installs over the old one.
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets: this APK uses a one-off debug key and won't install over the previous one."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Build APK
         run: flutter build apk --release
 
@@ -47,3 +74,10 @@ jobs:
           name: BleuLand-Energy-APK
           path: Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      # For checking which key signed it (the permanent key's SHA-256 starts 74:24:38:5D).
+      - name: Show the APK's signature
+        continue-on-error: true
+        run: |
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep -E "DN|SHA-256"

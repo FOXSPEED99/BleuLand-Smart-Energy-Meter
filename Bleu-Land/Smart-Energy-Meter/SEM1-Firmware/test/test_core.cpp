@@ -99,6 +99,52 @@ void test_power_overflow_zeroes_current_and_power() {
   TEST_ASSERT_FLOAT_WITHIN(0.1f, 230.0f, s.v);
 }
 
+// Field bug: one packet with a misread power register (38 W load read as
+// ~25 MW) showed 1,422 kW and added kWh. It must be replaced by the last
+// good power, and impossible values must never come through.
+void test_misread_power_is_replaced() {
+  Hlw8032 h;
+  HlwSample s;
+  // 222 V, 0.17 A, ~37 W
+  auto good = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 203000);
+  TEST_ASSERT_EQUAL(1, feedAll(h, good, s));
+  float realP = s.p;
+  TEST_ASSERT_FLOAT_WITHIN(3.0f, 37.0f, realP);
+  TEST_ASSERT_FALSE(s.glitch);
+  // same packet but the power register is tiny -> ~25 MW
+  auto bad = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 3);
+  TEST_ASSERT_EQUAL(1, feedAll(h, bad, s));
+  TEST_ASSERT_TRUE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, realP, s.p);
+  // a power that V x I can't explain (~370 W at 0.17 A) is replaced too
+  auto unexplained = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 20300);
+  TEST_ASSERT_EQUAL(1, feedAll(h, unexplained, s));
+  TEST_ASSERT_TRUE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, realP, s.p);
+  TEST_ASSERT_EQUAL(2, (int)h.glitches());
+  // a normal 1 kW packet still comes through unchanged
+  TEST_ASSERT_EQUAL(1, feedAll(h, normalPacket(), s));
+  TEST_ASSERT_FALSE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(1.0f, 1000.0f, s.p);
+}
+
+// If V x I persistently disagrees (bad calibration), the meter's own power is
+// shown after a moment instead of freezing on an old value.
+void test_persistent_mismatch_is_trusted_after_a_moment() {
+  Hlw8032 h;
+  HlwSample s;
+  auto good = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 203000);
+  feedAll(h, good, s);
+  auto unexplained = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 20300);
+  for (int k = 0; k < Hlw8032::kMaxHeld; k++) {
+    feedAll(h, unexplained, s);
+    TEST_ASSERT_TRUE(s.glitch);
+  }
+  feedAll(h, unexplained, s);
+  TEST_ASSERT_FALSE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(5.0f, 370.0f, s.p);
+}
+
 void test_chip_error_flagged() {
   Hlw8032 h;
   HlwSample s;
@@ -158,6 +204,58 @@ void test_meter_1000_imp_per_kwh_led() {
     pulses += m.takeWhPulses();
   }
   TEST_ASSERT_UINT32_WITHIN(1, 10, pulses);
+}
+
+void test_meter_no_load_cutoff() {
+  Meter m;
+  m.setNoLoadW(25);
+  Reading r;
+  m.tick(0, r);
+  HlwSample s;
+  s.v = 230;
+  uint32_t t = 0;
+  auto second = [&](float w, float a) {
+    s.p = w;
+    s.i = a;
+    m.add(s);
+    t += 1000;
+    m.tick(t, r);
+  };
+  // noise: 20 W at 0.14 A reads as nothing and adds no energy
+  second(20, 0.14f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.i);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.pf);
+  TEST_ASSERT_EQUAL_FLOAT(0, (float)m.totalWh());
+  // single-second noise spikes above the limit don't show either
+  second(27, 0.15f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  second(10, 0.1f);
+  second(28, 0.15f);
+  second(26, 0.15f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  second(5, 0.1f);
+  TEST_ASSERT_EQUAL_FLOAT(0, (float)m.totalWh());
+  // a real 100 W load shows on its 3rd second, and all 3 seconds are counted
+  second(100, 0.5f);
+  second(100, 0.5f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  TEST_ASSERT_EQUAL_FLOAT(0, (float)m.totalWh());
+  second(100, 0.5f);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 100, r.p);
+  TEST_ASSERT_FLOAT_WITHIN(1e-6, 300.0 / 3600.0, m.totalWh());
+  // once on, it stays on down to 80 % of the limit (no flicker at the edge)
+  second(21, 0.1f);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 21, r.p);
+  second(19, 0.1f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  // and needs the full limit for 3 s again to come back
+  second(24, 0.1f);
+  second(25, 0.12f);
+  second(25, 0.12f);
+  TEST_ASSERT_EQUAL_FLOAT(0, r.p);
+  second(25, 0.12f);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 25, r.p);
 }
 
 void test_meter_no_data_flag() {
@@ -280,11 +378,14 @@ int main(int, char**) {
   RUN_TEST(test_syncs_on_back_to_back_stream_with_garbage);
   RUN_TEST(test_rejects_bad_checksum);
   RUN_TEST(test_power_overflow_zeroes_current_and_power);
+  RUN_TEST(test_misread_power_is_replaced);
+  RUN_TEST(test_persistent_mismatch_is_trusted_after_a_moment);
   RUN_TEST(test_chip_error_flagged);
   RUN_TEST(test_pf_pulses_wrap_around);
   RUN_TEST(test_calibration_scales_values);
   RUN_TEST(test_meter_averages_and_integrates);
   RUN_TEST(test_meter_1000_imp_per_kwh_led);
+  RUN_TEST(test_meter_no_load_cutoff);
   RUN_TEST(test_meter_no_data_flag);
   RUN_TEST(test_meter_caps_long_gap);
   RUN_TEST(test_log_append_and_read_back);

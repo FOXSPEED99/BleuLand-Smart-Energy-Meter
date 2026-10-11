@@ -1,7 +1,6 @@
 #include "net.h"
 
 #include <ArduinoJson.h>
-#include <ESPmDNS.h>
 #include <WiFi.h>
 #include <esp_arduino_version.h>
 #include <esp_wifi.h>
@@ -63,10 +62,42 @@ bool wifiLowLevelInit(bool persistent);  // from the Arduino WiFi library
 namespace {
 volatile NetState netState = NetState::Connecting;
 volatile bool gotIp = false;
-bool mdnsStarted = false;
 volatile bool provActive = false;  // phone setup running: it manages the WiFi itself
 uint32_t lastRetryMs = 0;
 uint32_t reconnectAtMs = 0;
+
+// Setup window: phone setup is open while the old WiFi waits in a backup.
+volatile bool windowMode = false;
+volatile uint32_t windowEndsMs = 0;
+// Opened because the saved WiFi was unreachable: keep trying it in the
+// background, so the meter goes back as soon as the router is on again.
+// (Board package 3.x only: it tells us when a phone connects, see onBleEvent.)
+constexpr bool kBackgroundTries = ESP_ARDUINO_VERSION_MAJOR >= 3;
+bool windowAuto = false;
+String backupSsid, backupPass;
+volatile bool phoneConnected = false;  // a phone is connected over Bluetooth
+volatile bool credsReceived = false;   // the phone sent new WiFi details
+uint32_t backupTryMs = 0;
+uint32_t backupConnectAtMs = 0;
+bool connectingSaved = false;  // trying the saved WiFi (not in setup)
+uint32_t offlineSinceMs = 0;
+
+String cfgString(const uint8_t* s, size_t max) { return String((const char*)s).substring(0, strnlen((const char*)s, max)); }
+
+void extendWindow(uint32_t atLeastMs) {
+  uint32_t end = millis() + atLeastMs;
+  if ((int32_t)(end - windowEndsMs) > 0) windowEndsMs = end;
+}
+
+// Put a WiFi network back as the saved one (written to flash by the WiFi driver).
+void restoreWifi(const String& ssid, const String& pass) {
+  wifi_config_t c = {};
+  strlcpy((char*)c.sta.ssid, ssid.c_str(), sizeof(c.sta.ssid));
+  strlcpy((char*)c.sta.password, pass.c_str(), sizeof(c.sta.password));
+  esp_wifi_set_mode(WIFI_MODE_STA);
+  esp_wifi_set_config(WIFI_IF_STA, &c);
+  settings::setWifiFromSetup(true);
+}
 
 String storedSsid() {
   wifi_config_t conf = {};
@@ -114,17 +145,25 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t) {
       break;
     case ARDUINO_EVENT_PROV_CRED_RECV:
       Serial.println("[net] WiFi details received, connecting");
+      credsReceived = true;
       netState = NetState::Connecting;
+      if (windowMode) extendWindow(2UL * 60 * 1000);  // don't close in the middle of a try
       break;
     case ARDUINO_EVENT_PROV_CRED_FAIL:
       // Wrong password or network not found: let the app try again.
       Serial.println("[net] could not join that WiFi, waiting for new details");
       prov_reset_on_failure();
+      credsReceived = false;
       netState = NetState::Setup;
+      if (windowMode) extendWindow(3UL * 60 * 1000);
       break;
     case ARDUINO_EVENT_PROV_CRED_SUCCESS:
       Serial.println("[net] setup done");
       settings::setWifiFromSetup(true);  // these details came from our own phone setup
+      if (windowMode) {
+        windowMode = false;
+        settings::clearWifiBackup();  // the new WiFi works: the old one isn't needed
+      }
       break;
     case ARDUINO_EVENT_PROV_END:
       provActive = false;
@@ -143,13 +182,36 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t) {
       break;
   }
 }
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+// While a phone is connected the background tries pause: the app asks the
+// meter to scan for networks, which fails while it's busy joining one.
+void onBleEvent(void*, esp_event_base_t, int32_t id, void*) {
+  if (id == PROTOCOMM_TRANSPORT_BLE_CONNECTED) {
+    phoneConnected = true;
+    backupConnectAtMs = 0;
+    if (windowAuto && !gotIp) esp_wifi_disconnect();  // stop a try in progress
+  } else if (id == PROTOCOMM_TRANSPORT_BLE_DISCONNECTED) {
+    phoneConnected = false;
+    backupTryMs = millis();  // give it a moment before trying again
+  }
+}
+#endif
+
+// Rescue window: one background try to join the saved (backup) WiFi. Stop
+// the previous try first, then start the new one a moment later (see loop()).
+void tryBackupWifi(uint32_t now) {
+  Serial.printf("[net] setup open; checking whether \"%s\" is back\n", backupSsid.c_str());
+  esp_wifi_disconnect();
+  backupConnectAtMs = now + 500;
+  if (!backupConnectAtMs) backupConnectAtMs = 1;
+}
 }  // namespace
 
 namespace net {
 
 void begin() {
   host = settings::identity().deviceId;
-  host.toLowerCase();  // "sem1-a1b2c3" -> http://sem1-a1b2c3.local
+  host.toLowerCase();  // "sem1-a1b2c3": the name the router shows
   WiFi.onEvent(onEvent);
   WiFi.setHostname(host.c_str());
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -170,6 +232,16 @@ void startProvisioningOrConnect() {
   prov_handler_t none = PROV_HANDLER_NONE;
   cfg.app_event_handler = none;
 
+  // A setup window was cut short (power cut, or it timed out): the old WiFi
+  // goes back first. Then see whether a new window was asked for.
+  String bs, bp;
+  if (settings::loadWifiBackup(bs, bp)) {
+    Serial.printf("[net] putting back WiFi \"%s\"\n", bs.c_str());
+    restoreWifi(bs, bp);
+    settings::clearWifiBackup();
+  }
+  uint8_t window = settings::takeSetupWindow();
+
   if (prov_init(cfg) != ESP_OK) {
     Serial.println("[net] provisioning init failed, trying saved WiFi");
     WiFi.begin();
@@ -187,6 +259,28 @@ void startProvisioningOrConnect() {
     provisioned = false;
   }
 
+  // Setup window: keep the working WiFi in a backup, then open phone setup
+  // exactly like the first time. If nobody sets up a new WiFi, the backup
+  // comes back when the window closes (see loop()).
+  if (provisioned && window) {
+    wifi_config_t cur = {};
+    esp_wifi_get_config(WIFI_IF_STA, &cur);
+    String ssid = cfgString(cur.sta.ssid, sizeof(cur.sta.ssid));
+    settings::saveWifiBackup(ssid, cfgString(cur.sta.password, sizeof(cur.sta.password)));
+    prov_forget_wifi();
+    provisioned = false;
+    windowMode = true;
+    windowAuto = window == 2;
+    if (windowAuto) {
+      backupSsid = ssid;
+      backupPass = cfgString(cur.sta.password, sizeof(cur.sta.password));
+    }
+    windowEndsMs = millis() + (window == 1 ? WIFI_SETUP_USER_MS : WIFI_SETUP_AUTO_MS);
+    Serial.printf("[net] WiFi setup open for %u min (%s); \"%s\" comes back if nothing changes\n",
+                  (unsigned)((window == 1 ? WIFI_SETUP_USER_MS : WIFI_SETUP_AUTO_MS) / 60000),
+                  window == 1 ? "asked for" : "saved WiFi unreachable", ssid.c_str());
+  }
+
   if (!provisioned) {
     const Identity& id = settings::identity();
     netState = NetState::Setup;
@@ -195,9 +289,27 @@ void startProvisioningOrConnect() {
     prov_endpoint_create("sem1-claim");
     if (prov_start(PROV_SECURITY_1, id.pop.c_str(), id.bleName.c_str(), nullptr) != ESP_OK) {
       Serial.println("[net] could not start BLE setup");
+      // don't blink "setup" when nobody can connect: in a window, go back to
+      // the saved WiFi now (loop() restarts with it)
+      provActive = false;
+      netState = NetState::Connecting;
+      if (windowMode) windowEndsMs = millis();
       return;
     }
     prov_endpoint_register("sem1-claim", claimHandler, nullptr);
+    if (windowAuto && kBackgroundTries) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      esp_event_handler_register(PROTOCOMM_TRANSPORT_BLE_EVENT, ESP_EVENT_ANY_ID, onBleEvent, nullptr);
+#endif
+      // Only our own tries, every 30 s: the Arduino library would otherwise
+      // retry non-stop and get in the way of the phone setup.
+      WiFi.setAutoReconnect(false);
+      wifi_config_t c = {};
+      strlcpy((char*)c.sta.ssid, backupSsid.c_str(), sizeof(c.sta.ssid));
+      strlcpy((char*)c.sta.password, backupPass.c_str(), sizeof(c.sta.password));
+      esp_wifi_set_config(WIFI_IF_STA, &c);
+      backupTryMs = millis() - 25000;  // first try in ~5 s
+    }
     Serial.printf("[net] setup mode: BLE name %s\n", id.bleName.c_str());
     Serial.printf("[net] QR payload: %s\n", settings::qrPayload().c_str());
   } else {
@@ -205,15 +317,61 @@ void startProvisioningOrConnect() {
     esp_wifi_start();
     prov_deinit();
     Serial.printf("[net] connecting to saved WiFi \"%s\"\n", storedSsid().c_str());
-    Serial.println("[net] (to set up a different WiFi: hold BOOT 5 s, or type wifi-reset)");
+    Serial.println("[net] (to change the WiFi: app -> Settings -> WiFi, or hold the button 5 s)");
     WiFi.setSleep(false);  // no modem sleep: smoother live data
     WiFi.begin();          // saved network
     lastRetryMs = millis();
+    connectingSaved = true;
   }
 }
 
 void loop() {
   uint32_t now = millis();
+  // Rescue window: the saved WiFi works again (router back on). Close the
+  // setup and restart on it, as if nothing happened.
+  if (windowMode && windowAuto && gotIp && !credsReceived) {
+    Serial.printf("[net] \"%s\" is back: closing WiFi setup\n", backupSsid.c_str());
+    restoreWifi(backupSsid, backupPass);
+    settings::clearWifiBackup();
+    delay(200);
+    ESP.restart();
+  }
+  if (windowMode && windowAuto && kBackgroundTries && !phoneConnected && !credsReceived && !gotIp) {
+    if (now - backupTryMs > 30000) {
+      backupTryMs = now;
+      tryBackupWifi(now);
+    }
+    if (backupConnectAtMs && (int32_t)(now - backupConnectAtMs) >= 0) {
+      backupConnectAtMs = 0;
+      esp_wifi_connect();
+    }
+  }
+  // Setup window over and no new WiFi: back to the old one.
+  if (windowMode && (int32_t)(now - windowEndsMs) >= 0) {
+    String s, p;
+    if (settings::loadWifiBackup(s, p)) {
+      Serial.printf("[net] WiFi setup closed without changes, back to \"%s\"\n", s.c_str());
+      restoreWifi(s, p);
+      settings::clearWifiBackup();
+    }
+    delay(200);
+    ESP.restart();
+  }
+  // The saved WiFi has been unreachable for a while (password changed, new
+  // router, moved house...): open phone setup so the app can fix it, while
+  // still trying the saved WiFi in case it was just switched off.
+  if (connectingSaved && !gotIp && !provActive) {
+    if (!offlineSinceMs) {
+      offlineSinceMs = now ? now : 1;
+    } else if (now - offlineSinceMs > WIFI_RESCUE_AFTER_MS) {
+      Serial.printf("[net] no WiFi for %u min: opening phone setup\n", (unsigned)(WIFI_RESCUE_AFTER_MS / 60000));
+      settings::requestSetupWindow(2);
+      delay(200);
+      ESP.restart();
+    }
+  } else {
+    offlineSinceMs = 0;
+  }
   // Safety net: if the "got IP" event was ever missed, notice it here.
   if (!gotIp && WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
     gotIp = true;
@@ -237,15 +395,9 @@ void loop() {
   static bool wasOnline = false;
   bool on = gotIp;
   if (on && !wasOnline) {
-    if (!mdnsStarted && MDNS.begin(host.c_str())) {
-      mdnsStarted = true;
-      MDNS.addService("http", "tcp", 80);
-      MDNS.addService("sem1", "tcp", 80);  // lets the app find meters on the LAN
-      MDNS.addServiceTxt("sem1", "tcp", "id", settings::identity().deviceId.c_str());
-      MDNS.addServiceTxt("sem1", "tcp", "fw", SEM1_FW_VERSION);
-    }
-    Serial.printf("[net] online: http://%s  (http://%s.local)\n", WiFi.localIP().toString().c_str(),
-                  host.c_str());
+    // No mDNS (".local" names): it cost ~40 KB of a full app slot, and Android
+    // browsers don't resolve .local anyway. Use the IP printed here.
+    Serial.printf("[net] online: http://%s\n", WiFi.localIP().toString().c_str());
   }
   wasOnline = on;
 }
@@ -255,6 +407,17 @@ bool online() { return gotIp; }
 String ip() { return gotIp ? WiFi.localIP().toString() : String(""); }
 int rssi() { return gotIp ? WiFi.RSSI() : 0; }
 String hostname() { return host; }
+
+void openSetupWindow() {
+  Serial.println("[net] restarting into WiFi setup (the current WiFi is kept until a new one works)");
+  settings::requestSetupWindow(1);
+  delay(200);
+  ESP.restart();
+}
+
+bool inSetupWindow() { return windowMode; }
+
+String ssid() { return gotIp ? WiFi.SSID() : String(""); }
 
 void forgetWifiAndRestart() {
   Serial.println("[net] forgetting WiFi and restarting into setup mode");

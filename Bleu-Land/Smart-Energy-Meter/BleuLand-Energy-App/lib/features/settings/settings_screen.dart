@@ -6,7 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../data/models.dart';
+import '../../data/offline_cache.dart';
 import '../../data/providers.dart';
+import '../home/voltage_card.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
 
@@ -42,11 +44,19 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: meter.isOwner ? () => context.push('/settings/tariff') : null,
               ),
               _Row(
+                icon: Icons.speed_rounded,
+                title: 'Normal voltage',
+                value: '${meter.voltMin.round()}–${meter.voltMax.round()} V',
+                onTap: meter.isOwner ? () => _editVoltage(context, ref, meter) : null,
+              ),
+              _Row(
                 icon: Icons.group_rounded,
                 title: 'Share with family',
                 value: meter.isOwner ? 'Invite by e-mail' : 'Shared with you',
                 onTap: meter.isOwner ? () => context.push('/settings/sharing') : null,
               ),
+              _WifiRow(meter: meter),
+              _FirmwareRow(meter: meter),
             ]),
           ],
           const SectionHeader('Meters'),
@@ -73,6 +83,8 @@ class SettingsScreen extends ConsumerWidget {
                   ref.read(demoModeProvider.notifier).set(false);
                 } else {
                   await Supabase.instance.client.auth.signOut();
+                  // the next account mustn't see this one's saved data
+                  await OfflineCache.clear(ref.read(prefsProvider));
                 }
                 if (context.mounted) context.go('/welcome');
               },
@@ -95,6 +107,13 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   static String _n(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+  Future<void> _editVoltage(BuildContext context, WidgetRef ref, Meter meter) async {
+    final r = await showVoltageRangeSheet(context, meter);
+    if (r == null) return;
+    await ref.read(repositoryProvider).updateMeter(meter.copyWith(voltMin: r.$1, voltMax: r.$2));
+    ref.invalidate(metersProvider);
+  }
 
   Future<void> _rename(BuildContext context, WidgetRef ref, Meter meter) async {
     final ctrl = TextEditingController(text: meter.name);
@@ -156,6 +175,63 @@ class _MeterHeader extends ConsumerWidget {
   }
 
   static String _signal(int rssi) => rssi > -60 ? 'excellent' : rssi > -70 ? 'good' : rssi > -80 ? 'fair' : 'weak';
+}
+
+/// "Ibrahim · signal good", or "Offline · fix it".
+class _WifiRow extends ConsumerWidget {
+  const _WifiRow({required this.meter});
+  final Meter meter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    final live = ref.watch(liveProvider(meter.id)).value;
+    final online = live != null && DateTime.now().difference(live.ts) < AppConfig.offlineAfter;
+    final value = online
+        ? (live.ssid ?? 'Connected')
+        : live == null
+            ? 'Not reporting yet'
+            : 'Offline since ${fmtAgo(live.ts)}';
+    return ListTile(
+      onTap: () => context.push('/settings/wifi'),
+      leading: Icon(online ? Icons.wifi_rounded : Icons.wifi_off_rounded, color: online ? C.text2 : C.criticalText),
+      title: Text('WiFi', style: t.bodyLarge),
+      subtitle: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: const Icon(Icons.chevron_right_rounded, color: C.text3),
+    );
+  }
+}
+
+/// "Firmware 0.3.0 · up to date", or a highlighted "update available".
+class _FirmwareRow extends ConsumerWidget {
+  const _FirmwareRow({required this.meter});
+  final Meter meter;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).textTheme;
+    final s = ref.watch(firmwareProvider(meter.id)).value;
+    final current = s?.current ?? meter.fw ?? '–';
+    final (String value, bool attention) = s == null
+        ? (current, false)
+        : s.updating
+            ? ('Updating to ${s.target}…', true)
+            : s.latest != null
+                ? ('$current · version ${s.latest!.version} available', true)
+                : ('$current · up to date', false);
+    return ListTile(
+      onTap: () => context.push('/settings/firmware'),
+      leading: Badge(
+        isLabelVisible: attention,
+        backgroundColor: C.brand,
+        smallSize: 8,
+        child: const Icon(Icons.memory_rounded, color: C.text2),
+      ),
+      title: Text('Firmware', style: t.bodyLarge),
+      subtitle: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: attention ? TextStyle(color: C.brand) : null),
+      trailing: const Icon(Icons.chevron_right_rounded, color: C.text3),
+    );
+  }
 }
 
 class _Group extends StatelessWidget {

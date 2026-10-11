@@ -26,6 +26,7 @@
 #include "local_api.h"
 #include "meter.h"
 #include "net.h"
+#include "ota.h"
 #include "settings.h"
 
 
@@ -46,6 +47,11 @@ SemaphoreHandle_t logMtx;  // the main loop writes the log, the cloud task reads
 bool logOk = false;
 uint32_t uploadedSeqVal = 0;
 
+// Lowest/highest 1-s voltage since the cloud last asked (for low/high voltage
+// alerts: a 10 s upload alone would miss short dips).
+float vRangeMin = 0, vRangeMax = 0;
+bool vRangeHave = false;
+
 volatile TimeSource timeSrc = TimeSource::None;
 volatile bool ntpSynced = false;
 
@@ -65,6 +71,7 @@ void applyCoeffs() {
   Lock l;
   hlw.setCoeffs(c);
   meter.setEnergySource(s.energySource);
+  meter.setNoLoadW(NO_LOAD_W);
 }
 
 // ---------------- metering task ----------------
@@ -88,6 +95,11 @@ void meterTask(void*) {
         interval.add(r);
         interval.flags |= meter.takeFlags();  // same bit values as LogFlags
         pulses = meter.takeWhPulses();
+        if (r.samples && r.v >= 100) {  // below 100 V = no mains (bench supply)
+          if (!vRangeHave || r.v < vRangeMin) vRangeMin = r.v;
+          if (!vRangeHave || r.v > vRangeMax) vRangeMax = r.v;
+          vRangeHave = true;
+        }
       }
     }
     if (pulses) leds::addEnergyPulses(pulses);
@@ -221,8 +233,8 @@ void buttonLoop() {
       settings::factoryReset();
       net::forgetWifiAndRestart();
     } else if (held >= BUTTON_WIFI_RESET_MS) {
-      Serial.println("[button] WiFi reset");
-      net::forgetWifiAndRestart();
+      Serial.println("[button] WiFi setup");
+      net::openSetupWindow();
     }
   }
   if (pressedAt) {
@@ -263,6 +275,15 @@ LiveSnapshot snapshot() {
   s.haveRaw = hlw.hasPacket();
   memcpy(s.raw, hlw.lastPacket(), sizeof(s.raw));
   return s;
+}
+
+bool takeVoltRange(float& vMin, float& vMax) {
+  Lock l;
+  if (!vRangeHave) return false;
+  vMin = vRangeMin;
+  vMax = vRangeMax;
+  vRangeHave = false;
+  return true;
 }
 
 time_t now() {
@@ -346,6 +367,7 @@ void sem1Setup() {
   Serial.begin(115200);
   delay(50);
   Serial.printf("\nSEM-1 firmware %s (%s)\n", SEM1_FW_VERSION, SEM1_HW_NAME);
+  ota::begin();
 
   // Safety net in case partitions.csv and the IDE's Partition Scheme ever differ.
   const esp_partition_t* slot = esp_ota_get_running_partition();
@@ -390,6 +412,7 @@ void sem1Setup() {
 
 void sem1Loop() {
   net::loop();
+  ota::loop();
   clockLoop();
   logLoop();
   backupLoop();
