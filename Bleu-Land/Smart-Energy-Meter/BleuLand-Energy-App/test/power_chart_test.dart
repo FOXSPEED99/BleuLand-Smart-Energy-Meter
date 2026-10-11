@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Fox's real readings of 10-11 Oct (gaps included), newest first as the
 /// cloud sends them. The chart once said "Not enough data yet" for them.
 void main() {
-  testWidgets('power chart: last 24 h, one point per hour, 12-hour labels', (t) async {
+  testWidgets('power chart: today hour by hour, AM half labelled 1-12', (t) async {
     final raw = [
       ('2026-10-10T08:15:00Z', 0.0),
       ('2026-10-10T08:20:00Z', 0.0),
@@ -87,26 +87,24 @@ void main() {
     ];
     final pts = [for (final r in raw.reversed) PowerPoint(DateTime.parse(r.$1).toLocal(), r.$2.toDouble(), 130)];
     final now = DateTime.parse('2026-10-11T07:55:00Z').toLocal();
-    await t.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: PowerAreaChart(points: pts, now: now),
-          ),
-        ),
-      ),
-    );
-    await t.pump();
-    expect(find.text('No readings in the last 24 hours'), findsNothing);
-    expect(find.text('Power, kW'), findsOneWidget); // spikes up to 7.9 kW in this raw data
+    await t.pumpWidget(MaterialApp(home: Scaffold(body: PowerAreaChart(points: pts, now: now))));
+    await t.pumpAndSettle();
+    // 10:55 local: opens on the morning; readings from 8:35 on
+    expect(find.text('AM'), findsOneWidget);
+    expect(find.text('No readings this morning'), findsNothing);
+    for (final h in ['1', '6', '12']) {
+      expect(find.text(h), findsOneWidget);
+    }
+    // the afternoon is one swipe / arrow away and hasn't started yet
+    await t.tap(find.byIcon(Icons.chevron_right_rounded));
+    await t.pumpAndSettle();
+    expect(find.text('PM'), findsOneWidget);
+    expect(find.text("The afternoon hasn't started yet"), findsOneWidget);
   });
 
-  testWidgets('power chart: nothing in the last 24 h', (t) async {
-    await t.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: PowerAreaChart(points: const [])),
-      ),
-    );
-    expect(find.text('No readings in the last 24 hours'), findsOneWidget);
+  testWidgets('power chart: nothing recorded this morning', (t) async {
+    final now = DateTime(2026, 10, 11, 9, 30);
+    await t.pumpWidget(MaterialApp(home: Scaffold(body: PowerAreaChart(points: const [], now: now))));
+    expect(find.text('No readings this morning'), findsOneWidget);
   });
 }

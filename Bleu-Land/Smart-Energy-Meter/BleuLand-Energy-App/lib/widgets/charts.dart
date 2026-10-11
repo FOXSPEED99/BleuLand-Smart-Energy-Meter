@@ -249,13 +249,6 @@ class _GlowDot extends FlDotPainter {
 
 const _powerLine = Color(0xFF3FD9B3); // a lighter teal for the line on dark
 
-/// One hour of the power chart: the average power (null = no readings).
-class _Hour {
-  const _Hour(this.start, this.w);
-  final DateTime start;
-  final double? w;
-}
-
 /// "6 AM", "12 PM".
 String _hourText(DateTime t) => DateFormat('h a').format(t);
 
@@ -267,10 +260,12 @@ String _hourRange(DateTime t) {
       : '${_hourText(t)}–${_hourText(end)}';
 }
 
-/// Power over the last 24 hours, one point per hour (the average of the
-/// meter's 5-minute records), as a soft area with a bubble. The bubble marks
-/// the busiest hour until you tap or slide; then it shows that hour and stays
-/// there after the finger lifts. ‹ › in the title row step one hour.
+/// Today's power, hour by hour (the average of the meter's 5-minute
+/// records), as a soft area with a bubble. Two halves of 12 hours, AM and
+/// PM: swipe the chart or use ‹ AM › in the title row. Each hour is labelled
+/// by the hour it ends on, 1 … 12, so a half reads like a clock face; the
+/// bubble spells it out ("1.2 kW · 8–9 AM"). It sits on the busiest hour of
+/// the half until you tap another one (tap it again to go back).
 class PowerAreaChart extends StatefulWidget {
   const PowerAreaChart({
     super.key,
@@ -287,153 +282,69 @@ class PowerAreaChart extends StatefulWidget {
 }
 
 class _PowerAreaChartState extends State<PowerAreaChart> {
-  DateTime? _picked; // the picked hour; survives new data
+  late int _half = _currentHalf; // 0 = AM, 1 = PM
+  late final PageController _pages = PageController(initialPage: _half);
+  int? _picked; // hour of today, 0..23
 
-  /// The last 24 hours, ending with the current one.
-  List<_Hour> _hours() {
-    final now = widget.now ?? DateTime.now();
-    DateTime hour(int back) =>
-        DateTime(now.year, now.month, now.day, now.hour - back);
-    final first = hour(23);
-    final sums = <DateTime, (double, int)>{};
-    for (final p in widget.points) {
-      final h = DateTime(p.ts.year, p.ts.month, p.ts.day, p.ts.hour);
-      if (h.isBefore(first) || h.isAfter(hour(0))) continue;
-      final s = sums[h] ?? (0.0, 0);
-      sums[h] = (s.$1 + p.avgW, s.$2 + 1);
-    }
-    return [
-      for (var i = 23; i >= 0; i--)
-        _Hour(
-          hour(i),
-          sums[hour(i)] == null ? null : sums[hour(i)]!.$1 / sums[hour(i)]!.$2,
-        ),
-    ];
+  DateTime get _now => widget.now ?? DateTime.now();
+  int get _currentHalf => _now.hour < 12 ? 0 : 1; // opens where "now" is
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
   }
 
-  /// The next hour with data in direction [dir] (-1 / +1), or null.
-  int? _step(List<_Hour> hours, int from, int dir) {
-    for (var i = from + dir; i >= 0 && i < hours.length; i += dir) {
-      if (hours[i].w != null) return i;
+  /// Today's 24 hours: [h] = average power from h:00 to h+1:00, null when
+  /// the meter recorded nothing then.
+  List<double?> _hours() {
+    final now = _now;
+    final sum = List<double>.filled(24, 0);
+    final n = List<int>.filled(24, 0);
+    for (final p in widget.points) {
+      // a record is stamped at the end of its 5 minutes
+      final t = p.ts.subtract(const Duration(minutes: 1));
+      if (t.year != now.year || t.month != now.month || t.day != now.day) {
+        continue;
+      }
+      sum[t.hour] += p.avgW;
+      n[t.hour]++;
     }
-    return null;
+    return [for (var h = 0; h < 24; h++) n[h] == 0 ? null : sum[h] / n[h]];
+  }
+
+  void _show(int half) {
+    if (half == _half) return;
+    setState(() {
+      _half = half;
+      _picked = null;
+    });
+    _pages.animateToPage(
+      half,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final hours = _hours();
-    final withData = [
-      for (var i = 0; i < hours.length; i++)
-        if (hours[i].w != null) i,
-    ];
-    final p = hours.indexWhere((h) => h.start == _picked);
-    final picked = p < 0 || hours[p].w == null ? null : p;
-    final prev = picked == null ? null : _step(hours, picked, -1);
-    final next = picked == null ? null : _step(hours, picked, 1);
-
-    final top = withData.isEmpty
-        ? 0.0
-        : withData.map((i) => hours[i].w!).reduce(max);
-    final inKw = top >= 1000; // small homes read better in W
-    final scale = inKw ? 1000.0 : 1.0;
+    final values = hours.whereType<double>();
+    final top = values.isEmpty ? 0.0 : values.reduce(max);
 
     final header = Padding(
-      padding: const EdgeInsets.only(left: S.sm, bottom: S.md),
+      padding: const EdgeInsets.only(left: S.sm, bottom: S.sm),
       child: SizedBox(
         height: 36,
         child: Row(
           children: [
-            Text(
-              inKw ? 'Power, kW' : 'Power, W',
-              style: t.labelMedium?.copyWith(color: C.text2),
-            ),
+            Text('Average per hour', style: t.labelMedium?.copyWith(color: C.text2)),
             const Spacer(),
-            if (picked != null) ...[
-              _StepButton(
-                icon: Icons.chevron_left_rounded,
-                onStep: prev == null
-                    ? null
-                    : () => setState(() => _picked = hours[prev].start),
-              ),
-              _StepButton(
-                icon: Icons.chevron_right_rounded,
-                onStep: next == null
-                    ? null
-                    : () => setState(() => _picked = hours[next].start),
-              ),
-              SizedBox(
-                width: 40,
-                height: 36,
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  iconSize: 18,
-                  tooltip: 'Back to the busiest hour',
-                  onPressed: () => setState(() => _picked = null),
-                  icon: const Icon(Icons.close_rounded, color: C.text3),
-                ),
-              ),
-            ],
+            _HalfSwitch(half: _half, onChanged: _show),
           ],
         ),
       ),
-    );
-
-    if (withData.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          header,
-          SizedBox(
-            height: widget.height,
-            child: Center(
-              child: Text(
-                'No readings in the last 24 hours',
-                style: _axisStyle.copyWith(fontSize: 13),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    final peak = withData.reduce((a, b) => hours[b].w! > hours[a].w! ? b : a);
-    final axis = niceAxis(top / scale * 1.5); // room above for the bubble
-    final mark = picked ?? peak; // where the bubble sits
-    bool alone(int i) =>
-        (i == 0 || hours[i - 1].w == null) &&
-        (i == hours.length - 1 || hours[i + 1].w == null);
-    final bar = LineChartBarData(
-      spots: [
-        for (var i = 0; i < hours.length; i++)
-          hours[i].w == null
-              ? FlSpot.nullSpot
-              : FlSpot(i.toDouble(), hours[i].w! / scale),
-      ],
-      isCurved: true,
-      curveSmoothness: 0.3,
-      preventCurveOverShooting: true,
-      color: _powerLine,
-      barWidth: 2.5,
-      isStrokeCapRound: true,
-      // an hour with no neighbours has no line: show it as a dot
-      dotData: FlDotData(
-        checkToShowDot: (spot, _) => alone(spot.x.round()),
-        getDotPainter: (_, _, _, _) =>
-            FlDotCirclePainter(radius: 3, color: _powerLine, strokeWidth: 0),
-      ),
-      belowBarData: BarAreaData(
-        show: true,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            _powerLine.withValues(alpha: 0.45),
-            _powerLine.withValues(alpha: 0.04),
-          ],
-        ),
-      ),
-      showingIndicators: [mark],
     );
 
     return Column(
@@ -442,131 +353,252 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
         header,
         SizedBox(
           height: widget.height,
-          child: LineChart(
-            LineChartData(
-              minX: 0,
-              maxX: hours.length - 1.0,
-              minY: 0,
-              maxY: axis.max,
-              gridData: _grid(axis.step / 2),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                topTitles: const AxisTitles(),
-                rightTitles: const AxisTitles(),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 34,
-                    interval: axis.step,
-                    getTitlesWidget: (v, meta) => SideTitleWidget(
-                      meta: meta,
-                      child: Text(_tick(v, axis.step), style: _axisStyle),
-                    ),
-                  ),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 24,
-                    interval: 1,
-                    getTitlesWidget: (v, meta) {
-                      final i = v.round();
-                      // 12 AM, 6 AM, 12 PM, 6 PM
-                      if (i < 0 ||
-                          i >= hours.length ||
-                          hours[i].start.hour % 6 != 0) {
-                        return const SizedBox.shrink();
-                      }
-                      return SideTitleWidget(
-                        meta: meta,
-                        child: Text(
-                          _hourText(hours[i].start),
-                          style: _axisStyle,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              showingTooltipIndicators: [
-                ShowingTooltipIndicators([
-                  LineBarSpot(bar, 0, bar.spots[mark]),
-                ]),
-              ],
-              lineTouchData: LineTouchData(
-                // our own handling: the bubble moves to the touched hour and stays
-                handleBuiltInTouches: false,
-                touchSpotThreshold: double.infinity,
-                distanceCalculator: (touch, spot) =>
-                    (touch.dx - spot.dx).abs(), // nearest in time
-                getTouchLineStart: (_, _) => 0,
-                getTouchLineEnd: (bar, i) => bar.spots[i].y,
-                touchCallback: (event, resp) {
-                  if (!event.isInterestedForInteractions) return;
-                  final hit = resp?.lineBarSpots;
-                  if (hit == null || hit.isEmpty) return;
-                  final h = hours[hit.first.spotIndex];
-                  if (h.w != null && h.start != _picked) {
-                    setState(() => _picked = h.start);
-                  }
-                },
-                getTouchedSpotIndicator: (bar, idx) => [
-                  for (final _ in idx)
-                    TouchedSpotIndicatorData(
-                      FlLine(
-                        color: _powerLine.withValues(alpha: 0.6),
-                        strokeWidth: 1.2,
-                        dashArray: const [4, 4],
-                      ),
-                      FlDotData(
-                        getDotPainter: (_, _, _, _) => const _GlowDot(),
-                      ),
-                    ),
-                ],
-                touchTooltipData: LineTouchTooltipData(
-                  getTooltipColor: (_) => C.surface2,
-                  tooltipBorder: BorderSide(
-                    color: _powerLine.withValues(alpha: 0.5),
-                  ),
-                  tooltipBorderRadius: BorderRadius.circular(10),
-                  tooltipPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  tooltipMargin: 22,
-                  fitInsideHorizontally: true,
-                  fitInsideVertically: true,
-                  getTooltipItems: (spots) => [
-                    for (final _ in spots)
-                      LineTooltipItem(
-                        '${fmtPowerText(hours[mark].w!)}\n',
-                        const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: C.text,
-                        ),
-                        children: [
-                          TextSpan(
-                            text:
-                                '${picked == null ? 'Peak · ' : ''}${_hourRange(hours[mark].start)}',
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 11,
-                              color: C.text2,
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-              lineBarsData: [bar],
-            ),
-            duration: const Duration(milliseconds: 250),
+          child: PageView(
+            controller: _pages,
+            onPageChanged: (i) => setState(() {
+              _half = i;
+              _picked = null;
+            }),
+            children: [
+              for (final half in const [0, 1]) _page(half, hours, top),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  /// One half: 12 hours, labelled 1 … 12.
+  Widget _page(int half, List<double?> hours, double top) {
+    final first = half * 12;
+    final w = hours.sublist(first, first + 12);
+    final withData = [
+      for (var i = 0; i < 12; i++)
+        if (w[i] != null) i,
+    ];
+    final now = _now;
+    if (withData.isEmpty) {
+      final future = first > now.hour;
+      return Center(
+        child: Text(
+          future
+              ? 'The afternoon hasn\'t started yet'
+              : half == 0
+              ? 'No readings this morning'
+              : 'No readings this afternoon',
+          style: _axisStyle.copyWith(fontSize: 13),
+        ),
+      );
+    }
+
+    final day = DateTime(now.year, now.month, now.day);
+    final picked = _picked != null && _picked! ~/ 12 == half
+        ? _picked! - first
+        : null;
+    final mark =
+        picked ?? withData.reduce((a, b) => w[b]! > w[a]! ? b : a); // busiest
+    final scale = top >= 1000 ? 1000.0 : 1.0;
+    bool alone(int i) =>
+        (i == 0 || w[i - 1] == null) && (i == 11 || w[i + 1] == null);
+
+    final bar = LineChartBarData(
+      spots: [
+        for (var i = 0; i < 12; i++)
+          w[i] == null ? FlSpot.nullSpot : FlSpot(i.toDouble(), w[i]! / scale),
+      ],
+      isCurved: true,
+      curveSmoothness: 0.3,
+      preventCurveOverShooting: true,
+      color: _powerLine,
+      barWidth: 2.5,
+      isStrokeCapRound: true,
+      // an hour with no neighbours has no line to sit on: a dot (unless it's
+      // ~0 W, which would only look like a stray mark on the baseline)
+      dotData: FlDotData(
+        checkToShowDot: (spot, _) =>
+            alone(spot.x.round()) && w[spot.x.round()]! >= 1,
+        getDotPainter: (_, _, _, _) =>
+            FlDotCirclePainter(radius: 3.5, color: _powerLine, strokeWidth: 0),
+      ),
+      belowBarData: BarAreaData(
+        show: true,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            _powerLine.withValues(alpha: 0.45),
+            _powerLine.withValues(alpha: 0.03),
+          ],
+        ),
+      ),
+      showingIndicators: [mark],
+    );
+
+    return LineChart(
+      LineChartData(
+        minX: -0.65, // room for the glow of the first / last hour
+        maxX: 11.65,
+        minY: 0,
+        maxY: max(top / scale, 1e-6) * 1.55, // room above for the bubble
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(
+          show: true,
+          border: const Border(bottom: BorderSide(color: C.grid)),
+        ),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(),
+          rightTitles: const AxisTitles(),
+          leftTitles: const AxisTitles(),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 26,
+              interval: 1,
+              getTitlesWidget: (v, meta) {
+                final i = v.round();
+                if ((v - i).abs() > 0.01 || i < 0 || i > 11) {
+                  return const SizedBox.shrink();
+                }
+                final current = first + i == now.hour;
+                return SideTitleWidget(
+                  meta: meta,
+                  child: Text(
+                    '${i + 1}',
+                    style: _axisStyle.copyWith(
+                      color: i == mark
+                          ? C.text
+                          : current
+                          ? C.brand
+                          : C.text3,
+                      fontWeight: i == mark || current
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        showingTooltipIndicators: [
+          ShowingTooltipIndicators([LineBarSpot(bar, 0, bar.spots[mark])]),
+        ],
+        lineTouchData: LineTouchData(
+          // our own handling: tap an hour to put the bubble there
+          handleBuiltInTouches: false,
+          touchSpotThreshold: double.infinity,
+          distanceCalculator: (touch, spot) => (touch.dx - spot.dx).abs(),
+          getTouchLineStart: (_, _) => 0,
+          getTouchLineEnd: (bar, i) => bar.spots[i].y,
+          touchCallback: (event, resp) {
+            if (event is! FlTapUpEvent) return;
+            final hit = resp?.lineBarSpots;
+            if (hit == null || hit.isEmpty) return;
+            final i = hit.first.spotIndex;
+            if (w[i] == null) return;
+            setState(() => _picked = picked == i ? null : first + i);
+          },
+          getTouchedSpotIndicator: (bar, idx) => [
+            for (final _ in idx)
+              TouchedSpotIndicatorData(
+                FlLine(
+                  color: _powerLine.withValues(alpha: 0.6),
+                  strokeWidth: 1.2,
+                  dashArray: const [4, 4],
+                ),
+                FlDotData(getDotPainter: (_, _, _, _) => const _GlowDot()),
+              ),
+          ],
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (_) => C.surface2,
+            tooltipBorder: BorderSide(color: _powerLine.withValues(alpha: 0.5)),
+            tooltipBorderRadius: BorderRadius.circular(10),
+            tooltipPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
+            tooltipMargin: 22,
+            fitInsideHorizontally: true,
+            fitInsideVertically: true,
+            getTooltipItems: (spots) => [
+              for (final _ in spots)
+                LineTooltipItem(
+                  '${fmtPowerText(w[mark]!)}\n',
+                  const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: C.text,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: _hourRange(
+                        DateTime(day.year, day.month, day.day, first + mark),
+                      ),
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: C.text2,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        lineBarsData: [bar],
+      ),
+      duration: const Duration(milliseconds: 250),
+    );
+  }
+}
+
+/// ‹ AM › — which half of the day the power chart shows.
+class _HalfSwitch extends StatelessWidget {
+  const _HalfSwitch({required this.half, required this.onChanged});
+  final int half; // 0 = AM, 1 = PM
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    Widget arrow(IconData icon, int to, bool enabled) => SizedBox(
+      width: 36,
+      height: 36,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: 22,
+        onPressed: enabled ? () => onChanged(to) : null,
+        icon: Icon(icon, color: enabled ? C.text : C.text3.withValues(alpha: 0.35)),
+      ),
+    );
+    return Container(
+      decoration: BoxDecoration(
+        color: C.surface2,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          arrow(Icons.chevron_left_rounded, 0, half == 1),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: SizedBox(
+              key: ValueKey(half),
+              width: 30,
+              child: Text(
+                half == 0 ? 'AM' : 'PM',
+                textAlign: TextAlign.center,
+                style: t.labelMedium?.copyWith(
+                  color: C.brand,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          arrow(Icons.chevron_right_rounded, 1, half == 0),
+        ],
+      ),
     );
   }
 }

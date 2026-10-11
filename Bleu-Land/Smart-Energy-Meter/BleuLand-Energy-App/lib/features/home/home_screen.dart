@@ -222,7 +222,7 @@ class _DashboardState extends ConsumerState<_Dashboard>
             ),
           ),
           SectionHeader(
-            'Last 24 hours',
+            'Power today',
             trailing: TextButton(
               onPressed: () => context.go('/history'),
               child: const Text('History'),
