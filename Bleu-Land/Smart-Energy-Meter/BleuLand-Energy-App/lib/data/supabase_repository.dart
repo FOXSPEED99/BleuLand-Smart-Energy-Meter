@@ -148,7 +148,12 @@ class SupabaseRepository implements EnergyRepository {
           .gte('ts', from.toUtc().toIso8601String())
           .order('ts', ascending: true), // order() alone is newest first
     );
-    return [for (final r in rows) PowerPoint(_ts(r['ts'])!, _d(r['p_avg']), _d(r['p_max']))];
+    return [
+      for (final r in rows)
+        // firmware before 0.4.4 sometimes misread the power for a moment (the
+        // peak then reads 65535 W): leave those 5 minutes out of the chart
+        if (_d(r['p_max']) < 65535) PowerPoint(_ts(r['ts'])!, _d(r['p_avg']), _d(r['p_max'])),
+    ];
   }
 
   @override
