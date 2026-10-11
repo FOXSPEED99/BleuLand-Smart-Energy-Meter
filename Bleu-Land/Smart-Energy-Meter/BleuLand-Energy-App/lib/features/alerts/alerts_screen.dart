@@ -78,7 +78,7 @@ class _AlertTile extends StatelessWidget {
           '${a.severity >= 2 ? 'Very high' : 'High'} voltage · ${fmtVolts(a.value ?? 0)}',
         ),
     };
-    final when = DateFormat('EEE d MMM, HH:mm').format(a.createdAt);
+    final when = DateFormat('EEE d MMM, h:mm a').format(a.createdAt);
     final dur = a.resolvedAt?.difference(a.createdAt);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: S.lg, vertical: S.xs),

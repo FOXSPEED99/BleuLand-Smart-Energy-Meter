@@ -184,7 +184,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         },
                         highlight: offset == 0 ? highlight : null,
                         labelEvery: switch (w.bucket) {
-                          Bucket.hour => 3,
+                          Bucket.hour => 6, // "12 AM 6 AM 12 PM 6 PM"
                           Bucket.day => pts.length > 10 ? 5 : 1,
                           Bucket.month => 1,
                         },

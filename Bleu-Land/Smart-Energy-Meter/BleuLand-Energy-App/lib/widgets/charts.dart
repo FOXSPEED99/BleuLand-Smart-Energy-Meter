@@ -212,50 +212,6 @@ class _StepButtonState extends State<_StepButton> {
   }
 }
 
-/// 24 h · 6 h · 1 h: how much of the day the power chart shows.
-class _RangeChips extends StatelessWidget {
-  const _RangeChips({required this.hours, required this.onChanged});
-  final int hours;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (final h in const [24, 6, 1])
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(99),
-              onTap: () => onChanged(h),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: h == hours
-                      ? C.series.withValues(alpha: 0.22)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  '$h h',
-                  style: t.labelMedium?.copyWith(
-                    color: h == hours ? C.brand : C.text3,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 /// Glowing dot for the picked / peak point: soft halo, teal ring, white core.
 class _GlowDot extends FlDotPainter {
   const _GlowDot();
@@ -293,99 +249,72 @@ class _GlowDot extends FlDotPainter {
 
 const _powerLine = Color(0xFF3FD9B3); // a lighter teal for the line on dark
 
-/// One time slot of the power chart. [w] is the real average (null = the
-/// meter wasn't reporting: drawn as a gap); [shown] is what the line draws
-/// (lightly smoothed at 24 h, so the fridge switching doesn't zig-zag it).
-class _Slot {
-  _Slot(this.start, this.w);
+/// One hour of the power chart: the average power (null = no readings).
+class _Hour {
+  const _Hour(this.start, this.w);
   final DateTime start;
   final double? w;
-  double? shown;
 }
 
-/// Power over the last 24 h, in kW: a soft area with a bubble. The bubble
-/// marks the peak until you tap or slide; then it shows that moment and
-/// stays there after the finger lifts. 24 h / 6 h / 1 h under the chart,
-/// and ‹ › in the title row step one slot at a time.
+/// "6 AM", "12 PM".
+String _hourText(DateTime t) => DateFormat('h a').format(t);
+
+/// "2–3 PM", "11 AM–12 PM".
+String _hourRange(DateTime t) {
+  final end = DateTime(t.year, t.month, t.day, t.hour + 1);
+  return DateFormat('a').format(t) == DateFormat('a').format(end)
+      ? '${DateFormat('h').format(t)}–${_hourText(end)}'
+      : '${_hourText(t)}–${_hourText(end)}';
+}
+
+/// Power over the last 24 hours, one point per hour (the average of the
+/// meter's 5-minute records), as a soft area with a bubble. The bubble marks
+/// the busiest hour until you tap or slide; then it shows that hour and stays
+/// there after the finger lifts. ‹ › in the title row step one hour.
 class PowerAreaChart extends StatefulWidget {
   const PowerAreaChart({
     super.key,
     required this.points,
-    this.title = 'Power, kW',
     this.height = 190,
+    this.now,
   });
   final List<PowerPoint> points;
-  final String title;
   final double height;
+  final DateTime? now; // for tests
 
   @override
   State<PowerAreaChart> createState() => _PowerAreaChartState();
 }
 
 class _PowerAreaChartState extends State<PowerAreaChart> {
-  DateTime? _picked; // the picked moment; survives new data and range changes
-  int _hours = 24; // 24 / 6 / 1
+  DateTime? _picked; // the picked hour; survives new data
 
-  /// 15-minute slots at 24 h, the meter's own 5-minute records at 6 h / 1 h.
-  List<_Slot> _slots() {
-    // oldest first, whatever order they came in
-    final all = [...widget.points]..sort((a, b) => a.ts.compareTo(b.ts));
-    if (all.isEmpty) return const [];
-    final step = _hours >= 24 ? 15 : 5;
-    final end = all.last.ts;
-    final from = end.subtract(Duration(hours: _hours));
-    DateTime floor(DateTime t) =>
-        DateTime(t.year, t.month, t.day, t.hour, t.minute - t.minute % step);
-    final sums = <DateTime, List<double>>{};
-    for (final p in all) {
-      if (!p.ts.isAfter(from)) continue;
-      (sums[floor(p.ts)] ??= []).add(p.avgW);
+  /// The last 24 hours, ending with the current one.
+  List<_Hour> _hours() {
+    final now = widget.now ?? DateTime.now();
+    DateTime hour(int back) =>
+        DateTime(now.year, now.month, now.day, now.hour - back);
+    final first = hour(23);
+    final sums = <DateTime, (double, int)>{};
+    for (final p in widget.points) {
+      final h = DateTime(p.ts.year, p.ts.month, p.ts.day, p.ts.hour);
+      if (h.isBefore(first) || h.isAfter(hour(0))) continue;
+      final s = sums[h] ?? (0.0, 0);
+      sums[h] = (s.$1 + p.avgW, s.$2 + 1);
     }
-    if (sums.isEmpty) return const [];
-    final slots = <_Slot>[];
-    for (
-      var t = floor(sums.keys.reduce((a, b) => a.isBefore(b) ? a : b));
-      !t.isAfter(floor(end));
-      t = t.add(Duration(minutes: step))
-    ) {
-      final v = sums[t];
-      slots.add(
-        _Slot(t, v == null ? null : v.reduce((a, b) => a + b) / v.length),
-      );
-    }
-    for (var i = 0; i < slots.length; i++) {
-      final w = slots[i].w;
-      if (w == null) continue;
-      if (_hours < 24) {
-        slots[i].shown = w;
-        continue;
-      }
-      // light smoothing that never bridges a gap
-      final near = [
-        w,
-        if (i > 0 && slots[i - 1].w != null) slots[i - 1].w!,
-        if (i < slots.length - 1 && slots[i + 1].w != null) slots[i + 1].w!,
-      ];
-      slots[i].shown = near.reduce((a, b) => a + b) / near.length;
-    }
-    return slots;
+    return [
+      for (var i = 23; i >= 0; i--)
+        _Hour(
+          hour(i),
+          sums[hour(i)] == null ? null : sums[hour(i)]!.$1 / sums[hour(i)]!.$2,
+        ),
+    ];
   }
 
-  int? _indexOf(List<_Slot> slots, DateTime? t) {
-    if (t == null) return null;
-    final step = _hours >= 24 ? 15 : 5;
-    final i = slots.indexWhere(
-      (s) =>
-          !t.isBefore(s.start) &&
-          t.isBefore(s.start.add(Duration(minutes: step))),
-    );
-    return i < 0 || slots[i].w == null ? null : i;
-  }
-
-  /// The next slot with data in direction [dir] (-1 / +1), or null.
-  int? _step(List<_Slot> slots, int from, int dir) {
-    for (var i = from + dir; i >= 0 && i < slots.length; i += dir) {
-      if (slots[i].w != null) return i;
+  /// The next hour with data in direction [dir] (-1 / +1), or null.
+  int? _step(List<_Hour> hours, int from, int dir) {
+    for (var i = from + dir; i >= 0 && i < hours.length; i += dir) {
+      if (hours[i].w != null) return i;
     }
     return null;
   }
@@ -393,14 +322,21 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final slots = _slots();
+    final hours = _hours();
     final withData = [
-      for (var i = 0; i < slots.length; i++)
-        if (slots[i].w != null) i,
+      for (var i = 0; i < hours.length; i++)
+        if (hours[i].w != null) i,
     ];
-    final picked = _indexOf(slots, _picked);
-    final prev = picked == null ? null : _step(slots, picked, -1);
-    final next = picked == null ? null : _step(slots, picked, 1);
+    final p = hours.indexWhere((h) => h.start == _picked);
+    final picked = p < 0 || hours[p].w == null ? null : p;
+    final prev = picked == null ? null : _step(hours, picked, -1);
+    final next = picked == null ? null : _step(hours, picked, 1);
+
+    final top = withData.isEmpty
+        ? 0.0
+        : withData.map((i) => hours[i].w!).reduce(max);
+    final inKw = top >= 1000; // small homes read better in W
+    final scale = inKw ? 1000.0 : 1.0;
 
     final header = Padding(
       padding: const EdgeInsets.only(left: S.sm, bottom: S.md),
@@ -408,20 +344,23 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
         height: 36,
         child: Row(
           children: [
-            Text(widget.title, style: t.labelMedium?.copyWith(color: C.text2)),
+            Text(
+              inKw ? 'Power, kW' : 'Power, W',
+              style: t.labelMedium?.copyWith(color: C.text2),
+            ),
             const Spacer(),
             if (picked != null) ...[
               _StepButton(
                 icon: Icons.chevron_left_rounded,
                 onStep: prev == null
                     ? null
-                    : () => setState(() => _picked = slots[prev].start),
+                    : () => setState(() => _picked = hours[prev].start),
               ),
               _StepButton(
                 icon: Icons.chevron_right_rounded,
                 onStep: next == null
                     ? null
-                    : () => setState(() => _picked = slots[next].start),
+                    : () => setState(() => _picked = hours[next].start),
               ),
               SizedBox(
                 width: 40,
@@ -429,7 +368,7 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
                 child: IconButton(
                   padding: EdgeInsets.zero,
                   iconSize: 18,
-                  tooltip: 'Back to the peak',
+                  tooltip: 'Back to the busiest hour',
                   onPressed: () => setState(() => _picked = null),
                   icon: const Icon(Icons.close_rounded, color: C.text3),
                 ),
@@ -439,12 +378,8 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
         ),
       ),
     );
-    final chips = [
-      const SizedBox(height: S.sm),
-      _RangeChips(hours: _hours, onChanged: (h) => setState(() => _hours = h)),
-    ];
 
-    if (withData.length < 2) {
+    if (withData.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -453,37 +388,27 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
             height: widget.height,
             child: Center(
               child: Text(
-                'Not enough data yet',
+                'No readings in the last 24 hours',
                 style: _axisStyle.copyWith(fontSize: 13),
               ),
             ),
           ),
-          if (widget.points.length >= 2) ...chips,
         ],
       );
     }
 
-    // x = minutes since midnight, so time labels land on round times
-    final first = slots.first.start;
-    final origin = DateTime(first.year, first.month, first.day);
-    double x(DateTime t) => t.difference(origin).inSeconds / 60;
-    final labelEvery = switch (_hours) {
-      1 => 15,
-      6 => 120,
-      _ => 360,
-    }; // minutes
-    final peak = withData.reduce((a, b) => slots[b].w! > slots[a].w! ? b : a);
-    final top =
-        withData.map((i) => max(slots[i].w!, slots[i].shown!)).reduce(max) /
-        1000;
-    final axis = niceAxis(top * 1.5); // room above the line for the bubble
+    final peak = withData.reduce((a, b) => hours[b].w! > hours[a].w! ? b : a);
+    final axis = niceAxis(top / scale * 1.5); // room above for the bubble
     final mark = picked ?? peak; // where the bubble sits
+    bool alone(int i) =>
+        (i == 0 || hours[i - 1].w == null) &&
+        (i == hours.length - 1 || hours[i + 1].w == null);
     final bar = LineChartBarData(
       spots: [
-        for (final s in slots)
-          s.shown == null
+        for (var i = 0; i < hours.length; i++)
+          hours[i].w == null
               ? FlSpot.nullSpot
-              : FlSpot(x(s.start), s.shown! / 1000),
+              : FlSpot(i.toDouble(), hours[i].w! / scale),
       ],
       isCurved: true,
       curveSmoothness: 0.3,
@@ -491,9 +416,12 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
       color: _powerLine,
       barWidth: 2.5,
       isStrokeCapRound: true,
+      // an hour with no neighbours has no line: show it as a dot
       dotData: FlDotData(
-        show: _hours == 1,
-      ), // at 1 h every 5-minute record is a dot
+        checkToShowDot: (spot, _) => alone(spot.x.round()),
+        getDotPainter: (_, _, _, _) =>
+            FlDotCirclePainter(radius: 3, color: _powerLine, strokeWidth: 0),
+      ),
       belowBarData: BarAreaData(
         show: true,
         gradient: LinearGradient(
@@ -516,8 +444,8 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
           height: widget.height,
           child: LineChart(
             LineChartData(
-              minX: x(first),
-              maxX: x(slots.last.start),
+              minX: 0,
+              maxX: hours.length - 1.0,
               minY: 0,
               maxY: axis.max,
               gridData: _grid(axis.step / 2),
@@ -540,17 +468,19 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
                   sideTitles: SideTitles(
                     showTitles: true,
                     reservedSize: 24,
-                    interval: labelEvery.toDouble(),
+                    interval: 1,
                     getTitlesWidget: (v, meta) {
-                      // only round times (not the chart's first/last point)
-                      if (v.round() % labelEvery != 0) {
+                      final i = v.round();
+                      // 12 AM, 6 AM, 12 PM, 6 PM
+                      if (i < 0 ||
+                          i >= hours.length ||
+                          hours[i].start.hour % 6 != 0) {
                         return const SizedBox.shrink();
                       }
-                      final t = origin.add(Duration(minutes: v.round()));
                       return SideTitleWidget(
                         meta: meta,
                         child: Text(
-                          DateFormat('HH:mm').format(t),
+                          _hourText(hours[i].start),
                           style: _axisStyle,
                         ),
                       );
@@ -564,7 +494,7 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
                 ]),
               ],
               lineTouchData: LineTouchData(
-                // our own handling: the bubble moves to the touched moment and stays
+                // our own handling: the bubble moves to the touched hour and stays
                 handleBuiltInTouches: false,
                 touchSpotThreshold: double.infinity,
                 distanceCalculator: (touch, spot) =>
@@ -575,9 +505,9 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
                   if (!event.isInterestedForInteractions) return;
                   final hit = resp?.lineBarSpots;
                   if (hit == null || hit.isEmpty) return;
-                  final s = slots[hit.first.spotIndex];
-                  if (s.w != null && s.start != _picked) {
-                    setState(() => _picked = s.start);
+                  final h = hours[hit.first.spotIndex];
+                  if (h.w != null && h.start != _picked) {
+                    setState(() => _picked = h.start);
                   }
                 },
                 getTouchedSpotIndicator: (bar, idx) => [
@@ -609,7 +539,7 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
                   getTooltipItems: (spots) => [
                     for (final _ in spots)
                       LineTooltipItem(
-                        '${fmtPowerText(slots[mark].w!)}\n',
+                        '${fmtPowerText(hours[mark].w!)}\n',
                         const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 14,
@@ -619,7 +549,7 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
                         children: [
                           TextSpan(
                             text:
-                                '${picked == null ? 'Peak · ' : ''}${DateFormat('HH:mm').format(slots[mark].start)}',
+                                '${picked == null ? 'Peak · ' : ''}${_hourRange(hours[mark].start)}',
                             style: const TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 11,
@@ -636,7 +566,6 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
             duration: const Duration(milliseconds: 250),
           ),
         ),
-        ...chips,
       ],
     );
   }
@@ -681,7 +610,7 @@ class _EnergyBarChartState extends State<EnergyBarChart> {
   }
 
   String _label(DateTime t) => switch (widget.bucket) {
-    Bucket.hour => DateFormat('HH').format(t),
+    Bucket.hour => DateFormat('h a').format(t),
     Bucket.day =>
       widget.points.length <= 7
           ? DateFormat('E').format(t)
@@ -690,14 +619,13 @@ class _EnergyBarChartState extends State<EnergyBarChart> {
   };
 
   String _peakLabel(DateTime t) => switch (widget.bucket) {
-    Bucket.hour => DateFormat('HH:00').format(t),
+    Bucket.hour => _hourText(t),
     Bucket.day => DateFormat('EEE d').format(t),
     Bucket.month => DateFormat('MMM').format(t),
   };
 
   String _when(DateTime t) => switch (widget.bucket) {
-    Bucket.hour =>
-      '${DateFormat('HH:00').format(t)}–${DateFormat('HH:00').format(t.add(const Duration(hours: 1)))}',
+    Bucket.hour => _hourRange(t),
     Bucket.day => DateFormat('EEE d MMM').format(t),
     Bucket.month => DateFormat('MMM yyyy').format(t),
   };

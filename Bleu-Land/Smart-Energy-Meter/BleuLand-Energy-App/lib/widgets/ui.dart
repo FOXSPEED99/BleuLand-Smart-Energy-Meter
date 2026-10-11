@@ -350,7 +350,7 @@ class OfflineNote extends StatelessWidget {
     final at = savedAt;
     final now = DateTime.now();
     final sameDay = at != null && at.year == now.year && at.month == now.month && at.day == now.day;
-    final when = at == null ? null : DateFormat(sameDay ? 'HH:mm' : 'd MMM, HH:mm').format(at);
+    final when = at == null ? null : DateFormat(sameDay ? 'h:mm a' : 'd MMM, h:mm a').format(at);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: S.md, vertical: S.sm),
       decoration: BoxDecoration(color: C.warning.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(R.md)),

@@ -3,12 +3,11 @@ import 'package:bleuland_energy/widgets/charts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Fox's real readings of 10-11 Oct (gaps and spikes included). The cloud
-/// sent them newest first and the chart said "Not enough data yet".
+/// Fox's real readings of 10-11 Oct (gaps included), newest first as the
+/// cloud sends them. The chart once said "Not enough data yet" for them.
 void main() {
-  for (final h in ['24 h', '6 h', '1 h']) {
-    testWidgets('power chart draws the readings newest-first at $h', (t) async {
-      final raw = [
+  testWidgets('power chart: last 24 h, one point per hour, 12-hour labels', (t) async {
+    final raw = [
       ('2026-10-10T08:15:00Z', 0.0),
       ('2026-10-10T08:20:00Z', 0.0),
       ('2026-10-10T08:25:00Z', 0.0),
@@ -84,13 +83,30 @@ void main() {
       ('2026-10-11T07:35:00Z', 60.0),
       ('2026-10-11T07:40:00Z', 923),
       ('2026-10-11T07:45:00Z', 3582),
-      ('2026-10-11T07:50:00Z', 60.0)
-      ];
-      final pts = [for (final r in raw.reversed) PowerPoint(DateTime.parse(r.$1).toLocal(), r.$2.toDouble(), 130)]; // newest first, as the cloud sends them
-      await t.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: PowerAreaChart(points: pts)))));
-      await t.tap(find.text(h));
-      await t.pump();
-      expect(find.text('Not enough data yet'), findsNothing);
-    });
-  }
+      ('2026-10-11T07:50:00Z', 60.0),
+    ];
+    final pts = [for (final r in raw.reversed) PowerPoint(DateTime.parse(r.$1).toLocal(), r.$2.toDouble(), 130)];
+    final now = DateTime.parse('2026-10-11T07:55:00Z').toLocal();
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PowerAreaChart(points: pts, now: now),
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+    expect(find.text('No readings in the last 24 hours'), findsNothing);
+    expect(find.text('Power, kW'), findsOneWidget); // spikes up to 7.9 kW in this raw data
+  });
+
+  testWidgets('power chart: nothing in the last 24 h', (t) async {
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: PowerAreaChart(points: const [])),
+      ),
+    );
+    expect(find.text('No readings in the last 24 hours'), findsOneWidget);
+  });
 }

@@ -150,9 +150,9 @@ class SupabaseRepository implements EnergyRepository {
     );
     return [
       for (final r in rows)
-        // firmware before 0.4.4 sometimes misread the power for a moment (the
-        // peak then reads 65535 W): leave those 5 minutes out of the chart
-        if (_d(r['p_max']) < 65535) PowerPoint(_ts(r['ts'])!, _d(r['p_avg']), _d(r['p_max'])),
+        // firmware before 0.4.4 sometimes misread the power for a moment (a
+        // peak over 30 kW, impossible in a home): leave those 5 minutes out
+        if (_d(r['p_max']) <= 30000) PowerPoint(_ts(r['ts'])!, _d(r['p_avg']), _d(r['p_max'])),
     ];
   }
 
