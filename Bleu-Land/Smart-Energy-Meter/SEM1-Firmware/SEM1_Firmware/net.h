@@ -11,6 +11,8 @@
 // (through the cloud), or 2 minutes without the saved WiFi restart the meter
 // into the same phone setup. The working WiFi is kept in a backup and put
 // back if no new one is set up in time, so nothing is lost by opening it.
+// When setup opened because the WiFi was unreachable, the meter keeps trying
+// that WiFi every 30 s and goes back to it as soon as it works (router back on).
 //
 // During setup the app can also send a one-time "claim code" on the extra
 // BLE endpoint "sem1-claim"; the meter uses it later to link itself to the

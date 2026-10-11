@@ -38,7 +38,7 @@ The firmware picks the right pins and CT values from the board you select; you d
 
 - **Changing the WiFi (from 0.4.0).** Three ways into phone setup, all keeping the current WiFi as a backup that comes back if no new one is set up in time:
   - the app (**Settings → WiFi → Change WiFi network**) while the meter is online: the cloud tells it to restart into setup (10 minutes);
-  - automatically, after **2 minutes without its WiFi** (password changed, new router): setup opens for 4 minutes, then it tries the old WiFi again, and so on;
+  - automatically, after **2 minutes without its WiFi** (password changed, new router): setup opens for up to 30 minutes while the meter keeps trying the old WiFi every 30 s, and it goes straight back to it as soon as it works (router switched on again);
   - holding the button 5 s (10 minutes).
   A power cut in the middle of setup is safe too: the old WiFi is put back at the next start.
 - **Updates over WiFi (from 0.3.0).** The owner taps *Update* in the app; see below.

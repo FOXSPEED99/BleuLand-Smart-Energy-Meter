@@ -5,7 +5,7 @@
 #include "board.h"
 
 #ifndef SEM1_FW_VERSION
-#define SEM1_FW_VERSION "0.4.2"
+#define SEM1_FW_VERSION "0.4.3"
 #endif
 
 // ---------- current transformer + burden (R14) ----------
@@ -42,7 +42,8 @@ constexpr uint32_t BUTTON_WIFI_RESET_MS = 5000;   // hold: open WiFi setup (the 
 // WiFi setup window: phone setup over Bluetooth while the working WiFi is kept
 // as a backup and put back if nothing changes.
 constexpr uint32_t WIFI_SETUP_USER_MS = 10UL * 60 * 1000;  // opened from the button or the app
-constexpr uint32_t WIFI_SETUP_AUTO_MS = 4UL * 60 * 1000;   // opened because the WiFi was unreachable
+constexpr uint32_t WIFI_SETUP_AUTO_MS = 30UL * 60 * 1000;  // opened because the WiFi was unreachable (it keeps
+                                                           // trying that WiFi every 30 s and goes back when it works)
 constexpr uint32_t WIFI_RESCUE_AFTER_MS = 2UL * 60 * 1000; // that long without the saved WiFi
 constexpr uint32_t BUTTON_FACTORY_RESET_MS = 15000;  // hold: also forget owner/settings
 
