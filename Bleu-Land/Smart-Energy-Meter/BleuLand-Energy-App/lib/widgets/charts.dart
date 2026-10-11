@@ -437,12 +437,21 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
     final maxY = max(top / scale, 1e-6) * 1.55; // room above for the bubble
     final chart = LineChart(
       LineChartData(
-        minX: -1.05, // room for the clock icon and the first hour's glow
+        minX: -1.55, // room for the clock icon and the first hour's glow
         maxX: 11.65,
         minY: 0,
         maxY: maxY,
-        // faint guide lines, no numbers: the bubble gives the value
-        gridData: _grid(maxY / 4),
+        // a faint grid: a line per hour and four levels, no numbers (the
+        // bubble gives the value)
+        gridData: FlGridData(
+          horizontalInterval: maxY / 4,
+          verticalInterval: 1,
+          checkToShowVerticalLine: (v) => v > -0.5,
+          getDrawingHorizontalLine: (_) =>
+              const FlLine(color: C.grid, strokeWidth: 1),
+          getDrawingVerticalLine: (_) =>
+              const FlLine(color: C.grid, strokeWidth: 1),
+        ),
         borderData: FlBorderData(
           show: true,
           border: const Border(bottom: BorderSide(color: C.grid)),
@@ -458,8 +467,19 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
               interval: 1,
               getTitlesWidget: (v, meta) {
                 final i = v.round();
-                if ((v - i).abs() > 0.01 || i < 0 || i > 11) {
+                if ((v - i).abs() > 0.01 || i < -1 || i > 11) {
                   return const SizedBox.shrink();
+                }
+                if (i == -1) {
+                  // a small clock before the 1 … 12: these are hours
+                  return SideTitleWidget(
+                    meta: meta,
+                    child: const Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: C.text3,
+                    ),
+                  );
                 }
                 final current = first + i == now.hour;
                 return SideTitleWidget(
@@ -552,17 +572,7 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
       ),
       duration: const Duration(milliseconds: 250),
     );
-    // a small clock before the 1 … 12: these are hours
-    return Stack(
-      children: [
-        chart,
-        const Positioned(
-          left: 0,
-          bottom: 6,
-          child: Icon(Icons.schedule_rounded, size: 14, color: C.text3),
-        ),
-      ],
-    );
+    return chart;
   }
 }
 
