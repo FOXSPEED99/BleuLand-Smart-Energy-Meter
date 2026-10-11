@@ -434,13 +434,15 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
       showingIndicators: [mark],
     );
 
-    return LineChart(
+    final maxY = max(top / scale, 1e-6) * 1.55; // room above for the bubble
+    final chart = LineChart(
       LineChartData(
-        minX: -0.65, // room for the glow of the first / last hour
+        minX: -1.05, // room for the clock icon and the first hour's glow
         maxX: 11.65,
         minY: 0,
-        maxY: max(top / scale, 1e-6) * 1.55, // room above for the bubble
-        gridData: const FlGridData(show: false),
+        maxY: maxY,
+        // faint guide lines, no numbers: the bubble gives the value
+        gridData: _grid(maxY / 4),
         borderData: FlBorderData(
           show: true,
           border: const Border(bottom: BorderSide(color: C.grid)),
@@ -549,6 +551,17 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
         lineBarsData: [bar],
       ),
       duration: const Duration(milliseconds: 250),
+    );
+    // a small clock before the 1 … 12: these are hours
+    return Stack(
+      children: [
+        chart,
+        const Positioned(
+          left: 0,
+          bottom: 6,
+          child: Icon(Icons.schedule_rounded, size: 14, color: C.text3),
+        ),
+      ],
     );
   }
 }
