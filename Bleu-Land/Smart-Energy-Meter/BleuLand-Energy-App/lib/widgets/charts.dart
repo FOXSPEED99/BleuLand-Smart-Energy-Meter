@@ -435,22 +435,20 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
     );
 
     final maxY = max(top / scale, 1e-6) * 1.55; // room above for the bubble
-    final chart = LineChart(
+    Widget chart(double levelStep) => LineChart(
       LineChartData(
-        minX: -1.55, // room for the clock icon and the first hour's glow
-        maxX: 11.65,
+        minX: _minX,
+        maxX: _maxX,
         minY: 0,
         maxY: maxY,
-        // a faint grid: a line per hour and four levels, no numbers (the
-        // bubble gives the value)
+        // a faint grid of squares (a column per hour), no numbers: the
+        // bubble gives the value
         gridData: FlGridData(
-          horizontalInterval: maxY / 4,
+          horizontalInterval: levelStep,
           verticalInterval: 1,
           checkToShowVerticalLine: (v) => v > -0.5,
-          getDrawingHorizontalLine: (_) =>
-              const FlLine(color: C.grid, strokeWidth: 1),
-          getDrawingVerticalLine: (_) =>
-              const FlLine(color: C.grid, strokeWidth: 1),
+          getDrawingHorizontalLine: (_) => _softGrid,
+          getDrawingVerticalLine: (_) => _softGrid,
         ),
         borderData: FlBorderData(
           show: true,
@@ -572,9 +570,23 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
       ),
       duration: const Duration(milliseconds: 250),
     );
-    return chart;
+    // square cells: the levels are as far apart as the hours
+    return LayoutBuilder(
+      builder: (context, box) {
+        const labels = 26.0; // the hour-label row
+        final hourPx = box.maxWidth / (_maxX - _minX);
+        final plotPx = max(box.maxHeight - labels, 1.0);
+        return chart(maxY * hourPx / plotPx);
+      },
+    );
   }
 }
+
+// x range of a half: room for the clock icon left of the 1 and for the glow
+// of the first / last hour
+const _minX = -1.55, _maxX = 11.65;
+
+final _softGrid = FlLine(color: C.grid.withValues(alpha: 0.6), strokeWidth: 1);
 
 /// ‹ AM › — which half of the day the power chart shows.
 class _HalfSwitch extends StatelessWidget {
