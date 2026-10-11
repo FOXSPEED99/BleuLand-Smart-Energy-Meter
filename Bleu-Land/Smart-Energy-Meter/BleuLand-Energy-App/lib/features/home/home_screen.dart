@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
@@ -85,7 +86,12 @@ class _DashboardState extends ConsumerState<_Dashboard>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
+    final back = s == AppLifecycleState.resumed && !_foreground;
     _foreground = s == AppLifecycleState.resumed;
+    // Android drops the live connection while the app is in the background,
+    // so the last reading looked minutes old ("Meter is offline") until a
+    // refresh: reconnect and fetch the current reading straight away.
+    if (back) ref.invalidate(liveProvider(meter.id));
     _updateBeat();
   }
 
@@ -105,6 +111,12 @@ class _DashboardState extends ConsumerState<_Dashboard>
 
   void _ping() {
     ref.read(repositoryProvider).watch(meter.id);
+    // no live update for a while: the connection may have died quietly, so
+    // reconnect (if the meter really is offline this changes nothing)
+    final last = ref.read(liveProvider(meter.id)).value?.ts;
+    if (last == null || DateTime.now().difference(last) > AppConfig.offlineAfter) {
+      ref.invalidate(liveProvider(meter.id));
+    }
     // the meter adds a 5-minute record: keep the chart and today's numbers current
     if (DateTime.now().difference(_dataAt) >= const Duration(minutes: 5)) _refreshData();
   }

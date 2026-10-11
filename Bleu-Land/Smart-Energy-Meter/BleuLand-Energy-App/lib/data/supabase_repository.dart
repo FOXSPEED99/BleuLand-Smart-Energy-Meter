@@ -89,7 +89,9 @@ class SupabaseRepository implements EnergyRepository {
           ctrl.addError(e);
         }
         channel = _db
-            .channel('live-$meterId')
+            // a fresh name each time: a reconnect mustn't collide with the
+            // channel that is still being closed
+            .channel('live-$meterId-${DateTime.now().microsecondsSinceEpoch}')
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
