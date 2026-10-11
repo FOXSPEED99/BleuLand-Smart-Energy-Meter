@@ -221,13 +221,7 @@ class _DashboardState extends ConsumerState<_Dashboard>
               ],
             ),
           ),
-          SectionHeader(
-            'Power today',
-            trailing: TextButton(
-              onPressed: () => context.go('/history'),
-              child: const Text('History'),
-            ),
-          ),
+          const SectionHeader("Today's usage", trailing: LiveWave()),
           Panel(
             padding: const EdgeInsets.fromLTRB(S.sm, S.lg, S.lg, S.sm),
             child: power.when(

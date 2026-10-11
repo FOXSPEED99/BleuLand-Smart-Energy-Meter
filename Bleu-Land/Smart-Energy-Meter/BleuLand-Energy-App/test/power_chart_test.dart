@@ -87,14 +87,21 @@ void main() {
     ];
     final pts = [for (final r in raw.reversed) PowerPoint(DateTime.parse(r.$1).toLocal(), r.$2.toDouble(), 130)];
     final now = DateTime.parse('2026-10-11T07:55:00Z').toLocal();
-    await t.pumpWidget(MaterialApp(home: Scaffold(body: PowerAreaChart(points: pts, now: now))));
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PowerAreaChart(points: pts, now: now),
+        ),
+      ),
+    );
     await t.pumpAndSettle();
     // 10:55 local: opens on the morning; readings from 8:35 on
     expect(find.text('AM'), findsOneWidget);
     expect(find.text('No readings this morning'), findsNothing);
     for (final h in ['1', '6', '12']) {
-      expect(find.text(h), findsOneWidget);
+      expect(find.text(h), findsWidgets); // 1 … 12 for the morning, again for the afternoon
     }
+    expect(find.byIcon(Icons.schedule_rounded), findsOneWidget);
     // the afternoon is one swipe / arrow away and hasn't started yet
     await t.tap(find.byIcon(Icons.chevron_right_rounded));
     await t.pumpAndSettle();
@@ -102,9 +109,29 @@ void main() {
     expect(find.text("The afternoon hasn't started yet"), findsOneWidget);
   });
 
-  testWidgets('power chart: nothing recorded this morning', (t) async {
+  testWidgets('power chart: nothing recorded yet this morning', (t) async {
     final now = DateTime(2026, 10, 11, 9, 30);
-    await t.pumpWidget(MaterialApp(home: Scaffold(body: PowerAreaChart(points: const [], now: now))));
-    expect(find.text('No readings this morning'), findsOneWidget);
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PowerAreaChart(points: const [], now: now),
+        ),
+      ),
+    );
+    expect(find.text('Nothing yet this morning'), findsOneWidget);
+  });
+
+  testWidgets('power chart: just after noon it opens on the morning that has data', (t) async {
+    final day = DateTime(2026, 10, 11);
+    final pts = [for (var m = 0; m < 120; m += 5) PowerPoint(day.add(Duration(hours: 9, minutes: m)), 60, 70)];
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PowerAreaChart(points: pts, now: day.add(const Duration(hours: 12, minutes: 20))),
+        ),
+      ),
+    );
+    await t.pumpAndSettle();
+    expect(find.text('AM'), findsOneWidget);
   });
 }
