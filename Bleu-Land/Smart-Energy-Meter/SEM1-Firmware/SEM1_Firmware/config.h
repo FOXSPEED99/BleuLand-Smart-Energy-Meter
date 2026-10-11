@@ -5,7 +5,7 @@
 #include "board.h"
 
 #ifndef SEM1_FW_VERSION
-#define SEM1_FW_VERSION "0.4.3"
+#define SEM1_FW_VERSION "0.4.4"
 #endif
 
 // ---------- current transformer + burden (R14) ----------

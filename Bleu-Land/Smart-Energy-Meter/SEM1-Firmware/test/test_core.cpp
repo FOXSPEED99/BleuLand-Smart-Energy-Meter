@@ -99,6 +99,52 @@ void test_power_overflow_zeroes_current_and_power() {
   TEST_ASSERT_FLOAT_WITHIN(0.1f, 230.0f, s.v);
 }
 
+// Field bug: one packet with a misread power register (38 W load read as
+// ~25 MW) showed 1,422 kW and added kWh. It must be replaced by the last
+// good power, and impossible values must never come through.
+void test_misread_power_is_replaced() {
+  Hlw8032 h;
+  HlwSample s;
+  // 222 V, 0.17 A, ~37 W
+  auto good = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 203000);
+  TEST_ASSERT_EQUAL(1, feedAll(h, good, s));
+  float realP = s.p;
+  TEST_ASSERT_FLOAT_WITHIN(3.0f, 37.0f, realP);
+  TEST_ASSERT_FALSE(s.glitch);
+  // same packet but the power register is tiny -> ~25 MW
+  auto bad = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 3);
+  TEST_ASSERT_EQUAL(1, feedAll(h, bad, s));
+  TEST_ASSERT_TRUE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, realP, s.p);
+  // a power that V x I can't explain (~370 W at 0.17 A) is replaced too
+  auto unexplained = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 20300);
+  TEST_ASSERT_EQUAL(1, feedAll(h, unexplained, s));
+  TEST_ASSERT_TRUE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, realP, s.p);
+  TEST_ASSERT_EQUAL(2, (int)h.glitches());
+  // a normal 1 kW packet still comes through unchanged
+  TEST_ASSERT_EQUAL(1, feedAll(h, normalPacket(), s));
+  TEST_ASSERT_FALSE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(1.0f, 1000.0f, s.p);
+}
+
+// If V x I persistently disagrees (bad calibration), the meter's own power is
+// shown after a moment instead of freezing on an old value.
+void test_persistent_mismatch_is_trusted_after_a_moment() {
+  Hlw8032 h;
+  HlwSample s;
+  auto good = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 203000);
+  feedAll(h, good, s);
+  auto unexplained = makePacket(0x55, 2000000, 16936, 10000, 235300, 1000000, 20300);
+  for (int k = 0; k < Hlw8032::kMaxHeld; k++) {
+    feedAll(h, unexplained, s);
+    TEST_ASSERT_TRUE(s.glitch);
+  }
+  feedAll(h, unexplained, s);
+  TEST_ASSERT_FALSE(s.glitch);
+  TEST_ASSERT_FLOAT_WITHIN(5.0f, 370.0f, s.p);
+}
+
 void test_chip_error_flagged() {
   Hlw8032 h;
   HlwSample s;
@@ -332,6 +378,8 @@ int main(int, char**) {
   RUN_TEST(test_syncs_on_back_to_back_stream_with_garbage);
   RUN_TEST(test_rejects_bad_checksum);
   RUN_TEST(test_power_overflow_zeroes_current_and_power);
+  RUN_TEST(test_misread_power_is_replaced);
+  RUN_TEST(test_persistent_mismatch_is_trusted_after_a_moment);
   RUN_TEST(test_chip_error_flagged);
   RUN_TEST(test_pf_pulses_wrap_around);
   RUN_TEST(test_calibration_scales_values);

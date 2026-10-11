@@ -47,6 +47,34 @@ void Hlw8032::decode(const uint8_t* f, HlwSample& out) {
   // input noise floor (~0.2 A on the prototype).
   if (out.pOvf) out.i = 0;
 
+  // Now and then one register is misread. Seen in the field: 222 V and
+  // 0.17 A (a 38 W load) with the power read as ~25 MW for one packet, which
+  // showed 1,422 kW and added whole kWh to the bill. Values this meter can't
+  // measure are replaced by the last good ones, and so is power that the
+  // voltage and current can't explain (P can't exceed V x I; 30 % + 10 W of
+  // room for calibration and noise).
+  if (out.v > kMaxV) {
+    out.v = lastV_;
+    out.glitch = true;
+  }
+  if (out.i > kMaxA) {
+    out.i = lastI_;
+    out.glitch = true;
+  }
+  bool impossible = out.p > kMaxW;
+  bool unexplained = out.p > out.v * out.i * 1.3f + 10.0f;
+  if (impossible || (unexplained && held_ < kMaxHeld)) {
+    out.p = lastP_;
+    out.glitch = true;
+    held_++;
+  } else {
+    held_ = 0;
+  }
+  if (out.glitch) glitches_++;
+  lastV_ = out.v;
+  lastI_ = out.i;
+  lastP_ = out.p;
+
   // PF pulse counter. A 16-bit difference handles the wrap-around; at ~18
   // packets/s it can never wrap twice between two packets.
   uint16_t pf = ((uint16_t)f[21] << 8) | f[22];
