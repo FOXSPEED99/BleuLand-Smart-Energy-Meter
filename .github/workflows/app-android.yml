@@ -69,11 +69,15 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Show the APK's signature
-        run: keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | grep -E "Owner|SHA256"
-
       - uses: actions/upload-artifact@v4
         with:
           name: BleuLand-Energy-APK
           path: Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      # For checking which key signed it (the permanent key's SHA-256 starts 74:24:38:5D).
+      - name: Show the APK's signature
+        continue-on-error: true
+        run: |
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep -E "DN|SHA-256"
