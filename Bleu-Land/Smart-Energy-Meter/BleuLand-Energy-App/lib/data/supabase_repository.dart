@@ -25,7 +25,7 @@ class SupabaseRepository implements EnergyRepository {
   Future<List<Meter>> meters() async {
     final rows = await _cache.rows(
       'meters.$_uid',
-      () async => await _db.from('device_members').select('role, devices(*)').eq('user_id', _uid).order('added_at'),
+      () async => await _db.from('device_members').select('role, devices(*)').eq('user_id', _uid).order('added_at', ascending: true),
     );
     return [
       for (final r in rows)
@@ -146,7 +146,7 @@ class SupabaseRepository implements EnergyRepository {
           .select('ts, p_avg, p_max')
           .eq('device_id', meterId)
           .gte('ts', from.toUtc().toIso8601String())
-          .order('ts'),
+          .order('ts', ascending: true), // order() alone is newest first
     );
     return [for (final r in rows) PowerPoint(_ts(r['ts'])!, _d(r['p_avg']), _d(r['p_max']))];
   }

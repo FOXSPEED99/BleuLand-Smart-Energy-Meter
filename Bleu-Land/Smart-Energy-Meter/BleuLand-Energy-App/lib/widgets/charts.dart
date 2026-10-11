@@ -328,7 +328,8 @@ class _PowerAreaChartState extends State<PowerAreaChart> {
 
   /// 15-minute slots at 24 h, the meter's own 5-minute records at 6 h / 1 h.
   List<_Slot> _slots() {
-    final all = widget.points;
+    // oldest first, whatever order they came in
+    final all = [...widget.points]..sort((a, b) => a.ts.compareTo(b.ts));
     if (all.isEmpty) return const [];
     final step = _hours >= 24 ? 15 : 5;
     final end = all.last.ts;
