@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../data/models.dart';
+import '../../data/offline_cache.dart';
 import '../../data/providers.dart';
 import '../home/voltage_card.dart';
 import '../../theme/tokens.dart';
@@ -82,6 +83,8 @@ class SettingsScreen extends ConsumerWidget {
                   ref.read(demoModeProvider.notifier).set(false);
                 } else {
                   await Supabase.instance.client.auth.signOut();
+                  // the next account mustn't see this one's saved data
+                  await OfflineCache.clear(ref.read(prefsProvider));
                 }
                 if (context.mounted) context.go('/welcome');
               },

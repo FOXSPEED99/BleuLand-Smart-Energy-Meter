@@ -11,9 +11,15 @@ import '../../theme/tokens.dart';
 /// Mains voltage: live value on a scale with the home's normal range, a
 /// plain-words status. The range itself is changed in Settings.
 class VoltageCard extends StatefulWidget {
-  const VoltageCard({super.key, required this.reading, required this.meter});
+  const VoltageCard({
+    super.key,
+    required this.reading,
+    required this.meter,
+    this.phoneOffline = false,
+  });
   final LiveReading? reading;
   final Meter meter;
+  final bool phoneOffline; // live values only: hidden without internet
 
   @override
   State<VoltageCard> createState() => _VoltageCardState();
@@ -45,7 +51,9 @@ class _VoltageCardState extends State<VoltageCard> {
     // (below 100 V, e.g. powered from USB): hide the whole card.
     final reporting =
         r != null && now.difference(r.ts) <= AppConfig.offlineAfter;
-    if (!reporting || r.volts < 100) return const SizedBox.shrink();
+    if (widget.phoneOffline || !reporting || r.volts < 100) {
+      return const SizedBox.shrink();
+    }
     final v = r.volts;
     final status = voltStatus(v, min: m.voltMin, max: m.voltMax);
 

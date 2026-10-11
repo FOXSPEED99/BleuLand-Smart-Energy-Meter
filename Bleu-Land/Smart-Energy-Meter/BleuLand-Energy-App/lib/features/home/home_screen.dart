@@ -116,6 +116,8 @@ class _DashboardState extends ConsumerState<_Dashboard>
     final cycle = ref.watch(cycleProvider(meter.id));
     final power = ref.watch(power24hProvider(meter.id));
     final demo = ref.watch(demoModeProvider);
+    final phoneOffline = ref.watch(phoneOfflineProvider);
+    final savedAt = ref.watch(savedAtProvider);
 
     return RefreshIndicator(
       color: C.brand,
@@ -134,10 +136,21 @@ class _DashboardState extends ConsumerState<_Dashboard>
             reading: live.value,
             meter: meter,
             loading: live.isLoading && !live.hasValue,
+            phoneOffline: phoneOffline,
+            savedAt: savedAt,
           ),
           const SizedBox(height: S.md),
+          // below here is saved data: say so while there's no internet
+          if (phoneOffline) ...[
+            OfflineNote(savedAt: savedAt),
+            const SizedBox(height: S.md),
+          ],
           // hides itself while the meter is offline (and adds its own spacing)
-          VoltageCard(reading: live.value, meter: meter),
+          VoltageCard(
+            reading: live.value,
+            meter: meter,
+            phoneOffline: phoneOffline,
+          ),
           cycle.when(
             loading: () => const LoadingPanel(height: 220),
             error: (e, _) => ErrorPanel(

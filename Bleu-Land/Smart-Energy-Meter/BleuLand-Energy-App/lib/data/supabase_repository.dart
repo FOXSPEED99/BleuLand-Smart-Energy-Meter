@@ -4,13 +4,17 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
 
 import '../core/tariff.dart';
 import 'models.dart';
+import 'offline_cache.dart';
 import 'repository.dart';
 
 /// Real data from the BleuLand Energy cloud. Row-level security on the server
 /// makes sure a user only ever receives meters they own or that were shared.
+/// Meters, energy, the 24 h power and alerts are also kept on the phone
+/// ([OfflineCache]) so they still show without internet.
 class SupabaseRepository implements EnergyRepository {
-  SupabaseRepository(this._db);
+  SupabaseRepository(this._db, this._cache);
   final SupabaseClient _db;
+  final OfflineCache _cache;
 
   @override
   bool get isDemo => false;
@@ -19,11 +23,10 @@ class SupabaseRepository implements EnergyRepository {
 
   @override
   Future<List<Meter>> meters() async {
-    final rows = await _db
-        .from('device_members')
-        .select('role, devices(*)')
-        .eq('user_id', _uid)
-        .order('added_at');
+    final rows = await _cache.rows(
+      'meters.$_uid',
+      () async => await _db.from('device_members').select('role, devices(*)').eq('user_id', _uid).order('added_at'),
+    );
     return [
       for (final r in rows)
         if (r['devices'] != null) _meterFrom(Map<String, dynamic>.from(r['devices'] as Map), r['role'] as String),
@@ -75,8 +78,14 @@ class SupabaseRepository implements EnergyRepository {
       onListen: () async {
         try {
           final row = await _db.from('device_live').select().eq('device_id', meterId).maybeSingle();
+          _cache.onReached();
           ctrl.add(row == null ? null : _liveFrom(row));
         } catch (e) {
+          if (e is PostgrestException) {
+            _cache.onReached();
+          } else {
+            _cache.onUnreachable();
+          }
           ctrl.addError(e);
         }
         channel = _db
@@ -87,6 +96,7 @@ class SupabaseRepository implements EnergyRepository {
               table: 'device_live',
               filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'device_id', value: meterId),
               callback: (p) {
+                _cache.onReached();
                 if (p.newRecord.isNotEmpty) ctrl.add(_liveFrom(p.newRecord));
               },
             )
@@ -101,43 +111,55 @@ class SupabaseRepository implements EnergyRepository {
 
   @override
   Future<void> watch(String meterId) async {
+    // Only makes updates faster (the normal 10 s updates keep working), but
+    // as it's sent every 25 s while Home is open it also tells us when the
+    // internet comes back.
     try {
       await _db.rpc('watch_device', params: {'p_id': meterId});
+      _cache.onReached();
+    } on PostgrestException {
+      _cache.onReached();
     } catch (_) {
-      // only makes updates faster; the normal 10 s updates keep working
+      _cache.onUnreachable();
     }
   }
 
   @override
   Future<List<EnergyPoint>> energy(String meterId, DateTime from, DateTime to, Bucket bucket) async {
-    final rows = await _db.rpc('get_energy', params: {
-      'p_id': meterId,
-      'p_from': from.toUtc().toIso8601String(),
-      'p_to': to.toUtc().toIso8601String(),
-      'p_bucket': bucket.name,
-    }) as List;
+    // saved per period start: the bill asks "from the 1st until now", so the
+    // end moves every time and mustn't be part of the key
+    final rows = await _cache.rows(
+      'energy.$meterId.${bucket.name}.${from.toUtc().toIso8601String()}',
+      () => _db.rpc('get_energy', params: {
+        'p_id': meterId,
+        'p_from': from.toUtc().toIso8601String(),
+        'p_to': to.toUtc().toIso8601String(),
+        'p_bucket': bucket.name,
+      }),
+    ) as List;
     return [for (final r in rows) EnergyPoint(_ts(r['bucket'])!, _d(r['kwh']))];
   }
 
   @override
   Future<List<PowerPoint>> power(String meterId, DateTime from) async {
-    final rows = await _db
-        .from('readings')
-        .select('ts, p_avg, p_max')
-        .eq('device_id', meterId)
-        .gte('ts', from.toUtc().toIso8601String())
-        .order('ts');
+    final rows = await _cache.rows(
+      'power.$meterId',
+      () async => await _db
+          .from('readings')
+          .select('ts, p_avg, p_max')
+          .eq('device_id', meterId)
+          .gte('ts', from.toUtc().toIso8601String())
+          .order('ts'),
+    );
     return [for (final r in rows) PowerPoint(_ts(r['ts'])!, _d(r['p_avg']), _d(r['p_max']))];
   }
 
   @override
   Future<List<AlertItem>> alerts(String meterId) async {
-    final rows = await _db
-        .from('alerts')
-        .select()
-        .eq('device_id', meterId)
-        .order('created_at', ascending: false)
-        .limit(50);
+    final rows = await _cache.rows(
+      'alerts.$meterId',
+      () async => await _db.from('alerts').select().eq('device_id', meterId).order('created_at', ascending: false).limit(50),
+    );
     return [
       for (final r in rows)
         AlertItem(

@@ -7,7 +7,7 @@ One Flutter codebase builds the **Android**, **iOS** and **web** versions. It ha
 | Screen | What it shows |
 |---|---|
 | **Welcome** | Create account · Sign in · **Try the demo** (a simulated Syrian home; no meter needed) |
-| **Home** | Live power with a usage ring and a usage level (light / moderate / high / very high); a plain "Offline" (no numbers) when the meter is offline; voltage, current and power factor; **voltage** card (live volts as a dot on a bar with the normal range, the zone it is in highlighted, status and advice; up to 3 V past the range still counts as normal); **this bill** in SYP with the cheap-block progress bar and an *"at this pace"* forecast; today's kWh and cost vs yesterday; power over the last 24 h |
+| **Home** | Live power with a usage ring and a usage level (light / moderate / high / very high); "Meter is offline" when the meter stops reporting, or "You're offline" when it's the phone that has no internet; voltage, current and power factor; **voltage** card (live volts as a needle on a bar with the normal range, the zone it is in highlighted, status and advice; hidden with no mains; up to 3 V past the range still counts as normal); **this bill**: kWh used and cost side by side, with the cheap-block bar; power over the last 24 h (soft area with a bubble on the peak or the touched moment; 24 h / 6 h / 1 h; gaps when the meter was off) |
 | **History** | Day / Week / Month / Year charts; total, average and peak; tap a bar for its value |
 | **Alerts** | High-usage alert (slider), offline alert, voltage alert (normal range, editable), and the list of past alerts |
 | **Settings** | Meter info, name, **electricity price** (blocks, 1- or 2-month bills, billing day, currency), **normal voltage** range, **share with family** by e-mail, **WiFi** (network, signal; change it over Bluetooth, or fix it when the meter is offline), **firmware** (version, "update available", Update now with live progress), add a meter, sign out |
@@ -58,6 +58,7 @@ test/tariff_test.dart         bill calculation tests
   - chart teal `#139C7C` on card `#171B20`;
   - amber only for "above the cheap block", always with an icon and a label.
 - **Font:** Poppins (the label's typeface), bundled, so it works offline.
+- **Without internet:** the last meters, bill, energy history, 24 h power and alerts are kept on the phone (`data/offline_cache.dart`, in SharedPreferences) and shown with a "No internet · showing data saved at 14:32" note; live values aren't shown. When the network comes back everything reloads by itself. Signing out clears the saved data.
 
 ## Still to do
 

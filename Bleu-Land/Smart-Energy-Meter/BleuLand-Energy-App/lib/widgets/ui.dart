@@ -1,5 +1,6 @@
 // Small building blocks shared by every screen.
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../theme/tokens.dart';
 
@@ -103,7 +104,7 @@ class DeltaText extends StatelessWidget {
   }
 }
 
-enum PillKind { live, stale, offline, info }
+enum PillKind { live, stale, offline, noInternet, info }
 
 /// Status chip: icon + word, never colour alone.
 class StatusPill extends StatelessWidget {
@@ -117,6 +118,7 @@ class StatusPill extends StatelessWidget {
       PillKind.live => (C.goodText, null),
       PillKind.stale => (C.warning, Icons.schedule_rounded),
       PillKind.offline => (C.criticalText, Icons.power_off_rounded),
+      PillKind.noInternet => (C.warning, Icons.wifi_off_rounded),
       PillKind.info => (C.text2, Icons.info_outline_rounded),
     };
     return Container(
@@ -334,4 +336,34 @@ class BrandMark extends StatelessWidget {
         ),
         child: Icon(Icons.bolt_rounded, color: C.brand, size: size * 0.6),
       );
+}
+
+/// "No internet · saved data from 14:32": shown above saved (not live) data
+/// while the phone is offline.
+class OfflineNote extends StatelessWidget {
+  const OfflineNote({super.key, this.savedAt});
+  final DateTime? savedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final at = savedAt;
+    final now = DateTime.now();
+    final sameDay = at != null && at.year == now.year && at.month == now.month && at.day == now.day;
+    final when = at == null ? null : DateFormat(sameDay ? 'HH:mm' : 'd MMM, HH:mm').format(at);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: S.md, vertical: S.sm),
+      decoration: BoxDecoration(color: C.warning.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(R.md)),
+      child: Row(children: [
+        const Icon(Icons.wifi_off_rounded, size: 16, color: C.warning),
+        const SizedBox(width: S.sm),
+        Expanded(
+          child: Text(
+            when == null ? 'No internet. Nothing saved on this phone yet.' : 'No internet · showing data saved at $when',
+            style: t.labelMedium?.copyWith(color: C.text),
+          ),
+        ),
+      ]),
+    );
+  }
 }

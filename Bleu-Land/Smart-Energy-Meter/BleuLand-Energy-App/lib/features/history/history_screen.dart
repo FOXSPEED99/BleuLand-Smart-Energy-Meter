@@ -96,6 +96,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.page, S.sm, S.page, S.xxl),
         children: [
+          if (ref.watch(phoneOfflineProvider)) ...[
+            OfflineNote(savedAt: ref.watch(savedAtProvider)),
+            const SizedBox(height: S.md),
+          ],
           SegmentedButton<Range>(
             showSelectedIcon: false,
             segments: const [

@@ -91,7 +91,24 @@ class BleuLandApp extends ConsumerWidget {
   const BleuLandApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The phone's network came back: try the cloud again right away.
+    ref.listen(networkProvider, (prev, next) {
+      if (prev?.value == false && next.value == true) ref.read(cloudReachProvider.notifier).reached();
+    });
+    // Back online: reload everything that was showing saved data.
+    ref.listen(phoneOfflineProvider, (prev, next) {
+      if (prev == true && !next) {
+        ref.invalidate(metersProvider);
+        ref.invalidate(liveProvider);
+        ref.invalidate(cycleProvider);
+        ref.invalidate(power24hProvider);
+        ref.invalidate(energyProvider);
+        ref.invalidate(alertsProvider);
+        ref.invalidate(firmwareProvider);
+      }
+    });
+    return MaterialApp.router(
         title: AppConfig.appName,
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
@@ -99,4 +116,5 @@ class BleuLandApp extends ConsumerWidget {
         themeMode: ThemeMode.dark,
         routerConfig: ref.watch(routerProvider),
       );
+  }
 }

@@ -1,5 +1,6 @@
 // App state, wired with Riverpod. Screens "watch" these and rebuild when the
 // data changes (new live reading, settings saved, meter switched...).
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
@@ -7,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
 import '../core/tariff.dart';
 import 'demo_repository.dart';
 import 'models.dart';
+import 'offline_cache.dart';
 import 'repository.dart';
 import 'supabase_repository.dart';
 
@@ -36,7 +38,51 @@ final sessionProvider = Provider<Session?>((ref) {
 
 final repositoryProvider = Provider<EnergyRepository>((ref) {
   if (ref.watch(demoModeProvider)) return DemoRepository();
-  return SupabaseRepository(Supabase.instance.client);
+  final reach = ref.read(cloudReachProvider.notifier);
+  return SupabaseRepository(
+    Supabase.instance.client,
+    OfflineCache(ref.read(prefsProvider), onReached: reach.reached, onUnreachable: reach.unreachable),
+  );
+});
+
+// ---------- is the phone online? ----------
+
+/// The phone's own network: Wi-Fi or mobile data switched on (true) or not.
+final networkProvider = StreamProvider<bool>((ref) async* {
+  final c = Connectivity();
+  bool on(List<ConnectivityResult> r) => r.any((x) => x != ConnectivityResult.none);
+  yield on(await c.checkConnectivity());
+  yield* c.onConnectivityChanged.map(on);
+});
+
+/// Whether the last cloud request got through. Catches Wi-Fi that's
+/// connected but has no internet, which the phone itself reports as online.
+class CloudReach extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  void reached() {
+    if (!state) state = true;
+  }
+
+  void unreachable() {
+    if (state) state = false;
+  }
+}
+
+final cloudReachProvider = NotifierProvider<CloudReach, bool>(CloudReach.new);
+
+/// No internet on the phone: screens show saved data and say so.
+final phoneOfflineProvider = Provider<bool>((ref) {
+  if (ref.watch(demoModeProvider)) return false;
+  final network = ref.watch(networkProvider).value ?? true;
+  return !network || !ref.watch(cloudReachProvider);
+});
+
+/// When the shown cloud data was saved (for "saved at 14:32").
+final savedAtProvider = Provider<DateTime?>((ref) {
+  ref.watch(phoneOfflineProvider);
+  return OfflineCache.savedAt(ref.read(prefsProvider));
 });
 
 final metersProvider = FutureProvider<List<Meter>>((ref) async {

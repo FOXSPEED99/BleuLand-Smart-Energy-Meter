@@ -17,10 +17,14 @@ class LiveCard extends StatefulWidget {
     required this.reading,
     required this.meter,
     this.loading = false,
+    this.phoneOffline = false,
+    this.savedAt,
   });
   final LiveReading? reading;
   final Meter meter;
   final bool loading;
+  final bool phoneOffline; // no internet on the phone: nothing live to show
+  final DateTime? savedAt; // when the saved data was last refreshed
 
   @override
   State<LiveCard> createState() => _LiveCardState();
@@ -52,6 +56,7 @@ class _LiveCardState extends State<LiveCard> {
     final offline =
         !widget.loading &&
         (r == null || now.difference(r.ts) > AppConfig.offlineAfter);
+    if (widget.phoneOffline) return _OfflineCard.phone(savedAt: widget.savedAt);
     if (offline) return _OfflineCard(lastSeen: r?.ts);
     final known = !widget.loading;
     final watts = known ? r!.watts : 0.0;
@@ -247,9 +252,13 @@ class _UsageNote extends StatelessWidget {
 /// The meter isn't reporting: "last seen" and the Offline pill on one line,
 /// one short headline with one short reason under it, and a softly breathing
 /// icon with ripples that shows the app is still listening for the meter.
+/// [_OfflineCard.phone]: the same card in amber when it's the phone that has
+/// no internet (the meter may be fine).
 class _OfflineCard extends StatefulWidget {
-  const _OfflineCard({this.lastSeen});
-  final DateTime? lastSeen;
+  const _OfflineCard({this.lastSeen}) : phone = false;
+  const _OfflineCard.phone({DateTime? savedAt}) : lastSeen = savedAt, phone = true;
+  final DateTime? lastSeen; // meter: last report; phone: last saved data
+  final bool phone;
 
   @override
   State<_OfflineCard> createState() => _OfflineCardState();
@@ -271,16 +280,17 @@ class _OfflineCardState extends State<_OfflineCard>
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    const accent = C.criticalText;
+    final phone = widget.phone;
+    final accent = phone ? C.warning : C.criticalText;
     final seen = widget.lastSeen;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(R.xl),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF33201F), C.surface, C.surface],
-          stops: [0, 0.55, 1],
+          colors: [phone ? const Color(0xFF332A14) : const Color(0xFF33201F), C.surface, C.surface],
+          stops: const [0, 0.55, 1],
         ),
       ),
       padding: const EdgeInsets.fromLTRB(S.xl, S.lg, S.lg, S.xl),
@@ -291,13 +301,15 @@ class _OfflineCardState extends State<_OfflineCard>
             children: [
               Expanded(
                 child: Text(
-                  seen == null
-                      ? 'Not seen yet'
-                      : 'Last seen ${fmtAgoLong(seen)}',
+                  phone
+                      ? (seen == null ? 'Nothing saved yet' : 'Updated ${fmtAgoLong(seen)}')
+                      : (seen == null ? 'Not seen yet' : 'Last seen ${fmtAgoLong(seen)}'),
                   style: t.titleSmall?.copyWith(color: C.text2, fontSize: 13),
                 ),
               ),
-              const StatusPill(kind: PillKind.offline, label: 'Offline'),
+              phone
+                  ? const StatusPill(kind: PillKind.noInternet, label: 'No internet')
+                  : const StatusPill(kind: PillKind.offline, label: 'Offline'),
             ],
           ),
           const SizedBox(height: S.md),
@@ -308,14 +320,14 @@ class _OfflineCardState extends State<_OfflineCard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Meter is offline',
+                      phone ? 'You\'re offline' : 'Meter is offline',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: t.headlineSmall,
                     ),
                     const SizedBox(height: S.xs),
                     Text(
-                      'Power or internet may be down.',
+                      phone ? 'Connect your phone to see live data.' : 'Power or internet may be down.',
                       style: t.bodySmall?.copyWith(color: C.text2),
                     ),
                   ],
@@ -344,8 +356,8 @@ class _OfflineCardState extends State<_OfflineCard>
                                 alpha: 0.12 + 0.08 * breath,
                               ),
                             ),
-                            child: const Icon(
-                              Icons.power_off_rounded,
+                            child: Icon(
+                              phone ? Icons.wifi_off_rounded : Icons.power_off_rounded,
                               color: accent,
                               size: 24,
                             ),
