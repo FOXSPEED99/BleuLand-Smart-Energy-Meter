@@ -133,8 +133,14 @@ class SettingsScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(repositoryProvider).resetData(meter.id);
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('Couldn\'t reset. Check your internet connection and try again.')));
+    } catch (e) {
+      // say what really went wrong, not always "internet"
+      final msg = e is StateError && e.message == 'not_owner'
+          ? 'Only the meter\'s owner can reset it.'
+          : e is PostgrestException
+              ? 'The cloud couldn\'t reset the meter right now. Try again in a minute.'
+              : 'Couldn\'t reach the cloud. Check your internet connection and try again.';
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
       return;
     }
     // nothing old may come back from the phone's saved copy either
