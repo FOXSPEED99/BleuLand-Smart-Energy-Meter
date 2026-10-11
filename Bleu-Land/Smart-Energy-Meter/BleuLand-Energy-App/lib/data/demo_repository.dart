@@ -121,6 +121,9 @@ class DemoRepository implements EnergyRepository {
   Future<void> watch(String meterId) async {}
 
   @override
+  Future<void> checkReach() async {}
+
+  @override
   Future<List<EnergyPoint>> energy(String meterId, DateTime from, DateTime to, Bucket bucket) async {
     final now = DateTime.now();
     if (to.isAfter(now)) to = now;

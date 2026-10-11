@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:bleuland_energy/data/offline_cache.dart';
+import 'package:bleuland_energy/data/providers.dart' show hasNetwork;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
@@ -31,7 +33,10 @@ void main() {
   });
 
   test('without internet and nothing saved, the error is passed on', () async {
-    await expectLater(cache.rows('alerts.X', () async => throw const SocketException('down')), throwsA(isA<SocketException>()));
+    await expectLater(
+      cache.rows('alerts.X', () async => throw const SocketException('down')),
+      throwsA(isA<SocketException>()),
+    );
     expect(events, ['offline']);
   });
 
@@ -50,6 +55,77 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     await OfflineCache.clear(prefs);
     expect(OfflineCache.savedAt(prefs), isNull);
-    await expectLater(cache.rows('meters.u', () async => throw const SocketException('down')), throwsA(isA<SocketException>()));
+    await expectLater(
+      cache.rows('meters.u', () async => throw const SocketException('down')),
+      throwsA(isA<SocketException>()),
+    );
+  });
+
+  group('known to be offline', () {
+    var offline = false;
+    var network = true;
+    var asked = 0;
+    late OfflineCache fast;
+
+    setUp(() {
+      offline = false;
+      network = true;
+      asked = 0;
+      fast = OfflineCache(
+        prefs,
+        onReached: () => events.add('ok'),
+        onUnreachable: () => events.add('offline'),
+        isOffline: () => offline,
+        hasNetwork: () async => network,
+      );
+    });
+
+    Future<dynamic> query() async {
+      asked++;
+      return [42];
+    }
+
+    test('saved rows come back at once, without asking the cloud', () async {
+      await fast.rows('alerts.X', query);
+      await Future<void>.delayed(Duration.zero);
+      offline = true;
+      expect(await fast.rows('alerts.X', query), [42]);
+      expect(asked, 1);
+    });
+
+    test('Wi-Fi and data off: saved rows at once, and the app is told', () async {
+      await fast.rows('alerts.X', query);
+      await Future<void>.delayed(Duration.zero);
+      network = false;
+      expect(await fast.rows('alerts.X', query), [42]);
+      expect(asked, 1);
+      expect(events, ['ok', 'offline']);
+    });
+
+    test('Wi-Fi and data off with nothing saved fails at once', () async {
+      network = false;
+      await expectLater(fast.rows('alerts.X', query), throwsA(isA<SocketException>()));
+      expect(asked, 0);
+    });
+
+    test('offline but nothing saved yet: still tries the cloud', () async {
+      offline = true;
+      expect(await fast.rows('alerts.X', query), [42]);
+      expect(asked, 1);
+    });
+  });
+
+  test('probe reports whether the cloud answered', () async {
+    await cache.probe(() async => []);
+    await cache.probe(() async => throw const SocketException('down'));
+    await cache.probe(() async => throw const PostgrestException(message: 'denied'));
+    expect(events, ['ok', 'offline', 'ok']);
+  });
+
+  test('a VPN alone is not a network', () {
+    expect(hasNetwork([ConnectivityResult.wifi]), isTrue);
+    expect(hasNetwork([ConnectivityResult.mobile, ConnectivityResult.vpn]), isTrue);
+    expect(hasNetwork([ConnectivityResult.vpn]), isFalse);
+    expect(hasNetwork([ConnectivityResult.none]), isFalse);
   });
 }

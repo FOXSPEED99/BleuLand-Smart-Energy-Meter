@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
@@ -11,12 +12,27 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
 /// network fails the saved rows come back instead (the same parsing then
 /// runs on them). A server error (the cloud answered "no") is not a network
 /// problem, so it's passed on as before.
+///
+/// When the phone is already known to be offline the saved rows come back
+/// at once, without waiting for a request that can't get through.
 class OfflineCache {
-  OfflineCache(this._prefs, {required this.onReached, required this.onUnreachable});
+  OfflineCache(
+    this._prefs, {
+    required this.onReached,
+    required this.onUnreachable,
+    bool Function()? isOffline,
+    Future<bool> Function()? hasNetwork,
+  }) : isOffline = isOffline ?? (() => false),
+       hasNetwork = hasNetwork ?? (() async => true);
 
   final SharedPreferences _prefs;
   final void Function() onReached; // a request got through
   final void Function() onUnreachable; // a request failed for lack of network
+  final bool Function() isOffline; // already known: no internet right now
+  final Future<bool> Function() hasNetwork; // Wi-Fi or mobile data switched on
+
+  /// How long a request may take before the saved rows are shown instead.
+  static const timeout = Duration(seconds: 8);
 
   static const _prefix = 'cache.';
   static const _savedAtKey = 'cache_saved_at';
@@ -30,8 +46,15 @@ class OfflineCache {
   }
 
   Future<dynamic> rows(String key, Future<dynamic> Function() query) async {
+    final saved = _prefs.getString('$_prefix$key');
+    if (isOffline() && saved != null) return jsonDecode(saved);
+    if (!await hasNetwork()) {
+      onUnreachable();
+      if (saved != null) return jsonDecode(saved);
+      throw const SocketException('No network');
+    }
     try {
-      final v = await query().timeout(const Duration(seconds: 20));
+      final v = await query().timeout(timeout);
       onReached();
       unawaited(_save(key, v));
       return v;
@@ -40,9 +63,21 @@ class OfflineCache {
       rethrow;
     } catch (_) {
       onUnreachable();
-      final saved = _prefs.getString('$_prefix$key');
       if (saved == null) rethrow;
       return jsonDecode(saved);
+    }
+  }
+
+  /// A small request just to learn whether the cloud can be reached
+  /// (network switched, or the periodic "still there?" check).
+  Future<void> probe(Future<dynamic> Function() query) async {
+    try {
+      await query().timeout(timeout);
+      onReached();
+    } on PostgrestException {
+      onReached();
+    } catch (_) {
+      onUnreachable();
     }
   }
 

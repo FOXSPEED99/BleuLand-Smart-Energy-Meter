@@ -114,15 +114,12 @@ class SupabaseRepository implements EnergyRepository {
     // Only makes updates faster (the normal 10 s updates keep working), but
     // as it's sent every 25 s while Home is open it also tells us when the
     // internet comes back.
-    try {
-      await _db.rpc('watch_device', params: {'p_id': meterId});
-      _cache.onReached();
-    } on PostgrestException {
-      _cache.onReached();
-    } catch (_) {
-      _cache.onUnreachable();
-    }
+    await _cache.probe(() => _db.rpc('watch_device', params: {'p_id': meterId}));
   }
+
+  @override
+  Future<void> checkReach() =>
+      _cache.probe(() async => await _db.from('device_members').select('device_id').limit(1));
 
   @override
   Future<List<EnergyPoint>> energy(String meterId, DateTime from, DateTime to, Bucket bucket) async {

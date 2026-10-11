@@ -10,6 +10,10 @@ abstract class EnergyRepository {
   /// of every 10 s for the next ~45 s. Call it about every 30 s while shown.
   Future<void> watch(String meterId);
 
+  /// Is the cloud reachable? The answer goes to [cloudReachProvider]; called
+  /// when the phone's network changes.
+  Future<void> checkReach();
+
   /// kWh per hour/day/month between [from] and [to] (local time).
   Future<List<EnergyPoint>> energy(String meterId, DateTime from, DateTime to, Bucket bucket);
 

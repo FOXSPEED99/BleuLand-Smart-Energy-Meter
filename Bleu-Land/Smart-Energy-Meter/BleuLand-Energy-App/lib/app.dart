@@ -92,9 +92,15 @@ class BleuLandApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The phone's network came back: try the cloud again right away.
-    ref.listen(networkProvider, (prev, next) {
-      if (prev?.value == false && next.value == true) ref.read(cloudReachProvider.notifier).reached();
+    // Wi-Fi switched off, data switched on, network back...: check right
+    // away whether the cloud can still be reached, instead of waiting for
+    // the next request to fail or succeed.
+    ref.listen(connectivityProvider, (prev, next) {
+      final r = next.value;
+      if (r == null || !hasNetwork(r)) return;
+      // at launch only when the app was last offline (it starts on saved data)
+      if (prev?.value == null && ref.read(cloudReachProvider)) return;
+      ref.read(repositoryProvider).checkReach();
     });
     // Back online: reload everything that was showing saved data.
     ref.listen(phoneOfflineProvider, (prev, next) {

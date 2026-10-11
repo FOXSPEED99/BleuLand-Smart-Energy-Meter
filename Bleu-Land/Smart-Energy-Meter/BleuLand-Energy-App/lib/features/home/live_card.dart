@@ -308,7 +308,7 @@ class _OfflineCardState extends State<_OfflineCard>
                 ),
               ),
               phone
-                  ? const StatusPill(kind: PillKind.noInternet, label: 'No internet')
+                  ? const StatusPill(kind: PillKind.noInternet, label: 'Offline')
                   : const StatusPill(kind: PillKind.offline, label: 'Offline'),
             ],
           ),
@@ -326,9 +326,15 @@ class _OfflineCardState extends State<_OfflineCard>
                       style: t.headlineSmall,
                     ),
                     const SizedBox(height: S.xs),
-                    Text(
-                      phone ? 'Connect your phone to see live data.' : 'Power or internet may be down.',
-                      style: t.bodySmall?.copyWith(color: C.text2),
+                    // always one line: shrinks a little on narrow phones
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        phone ? 'Live data needs internet.' : 'Power or internet may be down.',
+                        maxLines: 1,
+                        style: t.bodySmall?.copyWith(color: C.text2),
+                      ),
                     ),
                   ],
                 ),
