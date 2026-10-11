@@ -92,6 +92,9 @@ class _DashboardState extends ConsumerState<_Dashboard>
   void _updateBeat() {
     final want = _visible && _foreground;
     if (want && _beat == null) {
+      // back on Home or back in the app: the chart and today's numbers may
+      // be from long ago
+      if (DateTime.now().difference(_dataAt) > const Duration(minutes: 1)) _refreshData();
       _ping();
       _beat = Timer.periodic(const Duration(seconds: 25), (_) => _ping());
     } else if (!want && _beat != null) {
@@ -100,7 +103,19 @@ class _DashboardState extends ConsumerState<_Dashboard>
     }
   }
 
-  void _ping() => ref.read(repositoryProvider).watch(meter.id);
+  void _ping() {
+    ref.read(repositoryProvider).watch(meter.id);
+    // the meter adds a 5-minute record: keep the chart and today's numbers current
+    if (DateTime.now().difference(_dataAt) >= const Duration(minutes: 5)) _refreshData();
+  }
+
+  /// Reload the chart and the bill numbers (they're loaded once, not live).
+  DateTime _dataAt = DateTime.now();
+  void _refreshData() {
+    _dataAt = DateTime.now();
+    ref.invalidate(cycleProvider(meter.id));
+    ref.invalidate(power24hProvider(meter.id));
+  }
 
   @override
   void dispose() {
@@ -123,8 +138,7 @@ class _DashboardState extends ConsumerState<_Dashboard>
       color: C.brand,
       backgroundColor: C.surface2,
       onRefresh: () async {
-        ref.invalidate(cycleProvider(meter.id));
-        ref.invalidate(power24hProvider(meter.id));
+        _refreshData();
         await ref.read(cycleProvider(meter.id).future);
       },
       child: ListView(
@@ -175,12 +189,18 @@ class _DashboardState extends ConsumerState<_Dashboard>
                         label: 'Today',
                         value: fmtKwh(c.todayKwh, unit: false),
                         unit: 'kWh',
-                        sub: c.yesterdayKwh > 0.05
-                            ? DeltaText(
-                                fraction: _sameTimeDelta(c),
-                                versus: 'yesterday',
-                              )
-                            : null,
+                        sub: c.yesterdayKwh <= 0.05
+                            ? null
+                            // a huge % only means yesterday had little data
+                            : _sameTimeDelta(c) > 3
+                                ? Text(
+                                    'Yesterday ${fmtKwh(c.yesterdayKwh, unit: false)} kWh',
+                                    style: t.labelSmall?.copyWith(color: C.text2),
+                                  )
+                                : DeltaText(
+                                    fraction: _sameTimeDelta(c),
+                                    versus: 'yesterday',
+                                  ),
                       ),
                     ),
                     const SizedBox(width: S.md),
