@@ -157,7 +157,31 @@ final energyProvider = FutureProvider.family<List<EnergyPoint>, EnergyQuery>(
   (ref, q) => ref.watch(repositoryProvider).energy(q.id, q.from, q.to, q.bucket),
 );
 
-final power24hProvider = FutureProvider.family<List<PowerPoint>, String>(
+/// What each bar in History added to the bill, keyed by bar start: walks
+/// usage from the start of the billing cycle the bars begin in, so the price
+/// block each kWh fell in is right (see Tariff.priceInOrder).
+final costProvider = FutureProvider.family<Map<DateTime, double>, EnergyQuery>((ref, q) async {
+  final meter = (await ref.watch(metersProvider.future)).firstWhere((m) => m.id == q.id);
+  final t = meter.tariff;
+  BillingPeriod cycleOf(DateTime d) =>
+      BillingPeriod.containing(d, billingDay: meter.billingDay, periodMonths: t.periodMonths);
+  final first = cycleOf(q.from).start;
+  final usage = [
+    if (first.isBefore(q.from))
+      ...await ref.watch(energyProvider((id: q.id, from: first, to: q.from, bucket: Bucket.day)).future),
+    ...await ref.watch(energyProvider(q).future),
+  ];
+  // "Match your bill": this cycle also has the days before the meter
+  ({DateTime at, double kwh})? known;
+  final match = regionById(ref.watch(regionProvider))?.billMatch == true ? t.match : null;
+  if (match != null) {
+    final c = await ref.watch(cycleProvider(q.id).future);
+    if (c.beforeKwh != null) known = (at: match.at, kwh: c.beforeKwh!);
+  }
+  return t.priceInOrder([for (final p in usage) (start: p.start, kwh: p.kwh)], cycleOf, known: known);
+});
+
+final power24hProvider =FutureProvider.family<List<PowerPoint>, String>(
   (ref, id) => ref.watch(repositoryProvider).power(id, DateTime.now().subtract(const Duration(hours: 24))),
 );
 

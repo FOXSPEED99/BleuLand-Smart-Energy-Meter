@@ -131,6 +131,33 @@ class Tariff {
   /// (e.g. "today cost" = costFor(used incl. today) - costFor(used before today)).
   double marginalCost(double usedSoFar, double kwh) => costFor(usedSoFar + kwh) - costFor(usedSoFar);
 
+  /// What each slice of [usage] added to the bill. Price blocks restart every
+  /// billing cycle, so the same kWh is cheap early in a cycle and dear once
+  /// the cheap block is used up: [usage] must cover each cycle from its start.
+  /// [known] is a cycle's total at a moment ("Match your bill"): from there
+  /// that cycle counts on from it. Keyed by slice start.
+  Map<DateTime, double> priceInOrder(
+    List<({DateTime start, double kwh})> usage,
+    BillingPeriod Function(DateTime) cycleOf, {
+    ({DateTime at, double kwh})? known,
+  }) {
+    final used = <DateTime, double>{}; // per cycle start
+    final out = <DateTime, double>{};
+    final knownCycle = known == null ? null : cycleOf(known.at).start;
+    var anchored = known == null;
+    for (final u in [...usage]..sort((a, b) => a.start.compareTo(b.start))) {
+      final c = cycleOf(u.start).start;
+      if (!anchored && c == knownCycle && !u.start.isBefore(known!.at)) {
+        used[c] = known.kwh;
+        anchored = true;
+      }
+      final soFar = used[c] ?? 0;
+      out[u.start] = marginalCost(soFar, u.kwh);
+      used[c] = soFar + u.kwh;
+    }
+    return out;
+  }
+
   /// Which block [kwh] falls in, and how much is left in it.
   TierPosition position(double kwh) {
     double start = 0;

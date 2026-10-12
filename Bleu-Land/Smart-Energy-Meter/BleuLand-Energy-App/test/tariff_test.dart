@@ -115,4 +115,33 @@ void main() {
       expect(withMatch.copyWith(clearMatch: true).match, isNull);
     });
   });
+
+  group('cost of each bar', () {
+    BillingPeriod cycleOf(DateTime d) => BillingPeriod.containing(d, periodMonths: 2);
+    ({DateTime start, double kwh}) day(int m, int d, double kwh) => (start: DateTime(2026, m, d), kwh: kwh);
+
+    test('cheap until the cycle passes 300 kWh, then dear', () {
+      final c = t.priceInOrder([day(9, 1, 250), day(9, 2, 100)], cycleOf);
+      expect(c[DateTime(2026, 9, 1)], 250 * 6);
+      expect(c[DateTime(2026, 9, 2)], 50 * 6 + 50 * 14);
+    });
+    test('a new cycle starts cheap again', () {
+      final c = t.priceInOrder([day(10, 31, 400), day(11, 1, 10)], cycleOf);
+      expect(c[DateTime(2026, 11, 1)], 60);
+    });
+    test('order of the list does not matter', () {
+      final c = t.priceInOrder([day(9, 2, 100), day(9, 1, 250)], cycleOf);
+      expect(c[DateTime(2026, 9, 2)], 50 * 6 + 50 * 14);
+    });
+    test('a matched bill counts from its total on', () {
+      final c = t.priceInOrder(
+        [day(9, 20, 5), day(9, 21, 10), day(9, 22, 10)],
+        cycleOf,
+        known: (at: DateTime(2026, 9, 21), kwh: 295),
+      );
+      expect(c[DateTime(2026, 9, 20)], 30); // before the match: what the meter saw
+      expect(c[DateTime(2026, 9, 21)], 5 * 6 + 5 * 14); // 295 → 305
+      expect(c[DateTime(2026, 9, 22)], 10 * 14);
+    });
+  });
 }

@@ -128,7 +128,7 @@ class StatusPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(99),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (kind == PillKind.live) _PulseDot(color: c) else Icon(icon, size: 14, color: c),
+        if (kind == PillKind.live) PulseDot(color: c) else Icon(icon, size: 14, color: c),
         const SizedBox(width: 6),
         Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: C.text)),
       ]),
@@ -136,14 +136,15 @@ class StatusPill extends StatelessWidget {
   }
 }
 
-class _PulseDot extends StatefulWidget {
-  const _PulseDot({required this.color});
+/// A small dot with a ring that keeps growing out of it: "this is live".
+class PulseDot extends StatefulWidget {
+  const PulseDot({super.key, required this.color});
   final Color color;
   @override
-  State<_PulseDot> createState() => _PulseDotState();
+  State<PulseDot> createState() => _PulseDotState();
 }
 
-class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
+class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin {
   late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
 
   @override

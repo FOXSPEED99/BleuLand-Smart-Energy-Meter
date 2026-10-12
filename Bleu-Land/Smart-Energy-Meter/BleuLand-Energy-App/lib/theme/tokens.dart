@@ -22,6 +22,7 @@ abstract final class C {
   static const onBrand = Color(0xFF06231C);
   static const series = Color(0xFF139C7C); // chart marks (passes dark-band checks)
   static const seriesWash = Color(0x1A139C7C); // 10 % area fill
+  static const money = Color(0xFF8AB4FF); // costs: soft blue, apart from the teal of energy
 
   // status (fixed; always shown with an icon + label, never colour alone)
   static const good = Color(0xFF0CA30C);
