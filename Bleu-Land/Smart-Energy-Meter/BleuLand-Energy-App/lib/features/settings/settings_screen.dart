@@ -5,10 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/config.dart';
 import '../../core/format.dart';
+import '../../core/region.dart';
 import '../../data/models.dart';
 import '../../data/offline_cache.dart';
 import '../../data/providers.dart';
 import '../home/voltage_card.dart';
+import '../region/region_screen.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
 
@@ -84,8 +86,15 @@ class SettingsScreen extends ConsumerWidget {
                 value: 'Simulated home',
                 onTap: null,
               )
-            else
+            else ...[
               _Row(icon: Icons.person_rounded, title: 'Signed in', value: email ?? ''),
+              _Row(
+                icon: Icons.public_rounded,
+                title: 'Country',
+                value: regionById(ref.watch(regionProvider))?.name ?? 'Not chosen',
+                onTap: () => _pickRegion(context, ref),
+              ),
+            ],
             _Row(
               icon: Icons.logout_rounded,
               title: demo ? 'Leave the demo' : 'Sign out',
@@ -125,6 +134,34 @@ class SettingsScreen extends ConsumerWidget {
     if (r == null) return;
     await ref.read(repositoryProvider).updateMeter(meter.copyWith(voltMin: r.$1, voltMax: r.$2));
     ref.invalidate(metersProvider);
+  }
+
+  Future<void> _pickRegion(BuildContext context, WidgetRef ref) async {
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: C.surface,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(S.page, 0, S.page, S.lg),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Country', style: Theme.of(c).textTheme.titleLarge),
+            const SizedBox(height: S.md),
+            RegionList(selected: ref.read(regionProvider), onPick: (id) => Navigator.pop(c, id)),
+          ]),
+        ),
+      ),
+    );
+    if (id == null || id == ref.read(regionProvider) || !context.mounted) return;
+    try {
+      await saveRegion(id);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn\'t save. Check your internet connection and try again.')),
+        );
+      }
+    }
   }
 
   Future<void> _resetData(BuildContext context, WidgetRef ref, Meter meter) async {

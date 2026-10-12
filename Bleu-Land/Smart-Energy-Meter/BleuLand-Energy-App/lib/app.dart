@@ -11,6 +11,7 @@ import 'features/auth/welcome_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/add_meter_screen.dart';
+import 'features/region/region_screen.dart';
 import 'features/settings/firmware_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/settings/sharing_screen.dart';
@@ -33,6 +34,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       final public = loc == '/welcome' || loc == '/auth';
       if (!signedIn && !demo && !public) return '/welcome';
       if ((signedIn || demo) && loc == '/welcome') return '/home';
+      // after signing up / in: pick the country once
+      final picked = demo || userRegion() != null;
+      if (signedIn && !picked && !public && loc != '/region') return '/region';
+      if (picked && loc == '/region') return '/home';
       return null;
     },
     routes: [
@@ -41,6 +46,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/auth',
         builder: (_, s) => AuthScreen(signUp: s.uri.queryParameters['mode'] == 'signup'),
       ),
+      GoRoute(path: '/region', builder: (_, _) => const RegionScreen()),
       GoRoute(path: '/add-meter', builder: (_, _) => const AddMeterScreen()),
       GoRoute(path: '/settings/tariff', builder: (_, _) => const TariffScreen()),
       GoRoute(path: '/settings/firmware', builder: (_, _) => const FirmwareScreen()),

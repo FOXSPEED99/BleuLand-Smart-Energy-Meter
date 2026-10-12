@@ -31,6 +31,22 @@ final demoModeProvider = NotifierProvider<DemoMode, bool>(DemoMode.new);
 /// Fires on every login / logout.
 final authChangesProvider = StreamProvider<AuthState>((ref) => Supabase.instance.client.auth.onAuthStateChange);
 
+/// The user's country (null: not picked yet). Kept in the account itself,
+/// so it comes along to a new phone.
+final regionProvider = Provider<String?>((ref) {
+  if (ref.watch(demoModeProvider)) return 'sy';
+  ref.watch(authChangesProvider);
+  return userRegion();
+});
+
+String? userRegion() {
+  final v = Supabase.instance.client.auth.currentUser?.userMetadata?['region'];
+  return v is String ? v : null;
+}
+
+Future<void> saveRegion(String id) =>
+    Supabase.instance.client.auth.updateUser(UserAttributes(data: {'region': id}));
+
 final sessionProvider = Provider<Session?>((ref) {
   ref.watch(authChangesProvider);
   return Supabase.instance.client.auth.currentSession;
