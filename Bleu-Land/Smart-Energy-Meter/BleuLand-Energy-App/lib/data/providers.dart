@@ -1,5 +1,7 @@
 // App state, wired with Riverpod. Screens "watch" these and rebuild when the
 // data changes (new live reading, settings saved, meter switched...).
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,23 +85,64 @@ final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) asyn
 });
 
 /// The phone's own network: Wi-Fi or mobile data switched on (true) or not.
-final networkProvider = Provider<bool>((ref) {
-  final r = ref.watch(connectivityProvider).value;
-  return r == null || hasNetwork(r);
-});
+/// Gone only once it stays gone for a few seconds: phones report a short
+/// "no network" while Wi-Fi hands over or reconnects.
+class NetworkUp extends Notifier<bool> {
+  static const settle = Duration(seconds: 4);
+  Timer? _down;
+
+  @override
+  bool build() {
+    ref.onDispose(() => _down?.cancel());
+    ref.listen(connectivityProvider, (_, next) {
+      final r = next.value;
+      if (r == null) return;
+      if (hasNetwork(r)) {
+        _down?.cancel();
+        _down = null;
+        state = true;
+      } else {
+        _down ??= Timer(settle, () {
+          _down = null;
+          state = false;
+        });
+      }
+    });
+    final r = ref.read(connectivityProvider).value;
+    return r == null || hasNetwork(r);
+  }
+}
+
+final networkProvider = NotifierProvider<NetworkUp, bool>(NetworkUp.new);
 
 /// Whether the last cloud request got through. Catches Wi-Fi or data that's
 /// connected but has no internet, which the phone itself reports as online.
 /// Remembered between launches, so an app opened without internet shows the
 /// saved data at once (the first "still there?" check corrects it).
+///
+/// One failed request right after one that got through isn't "no internet":
+/// on a slow or patchy line a request times out now and then while live data
+/// keeps arriving, and flipping to offline (and back, reloading everything)
+/// each time made the offline note blink. A failure counts only when nothing
+/// got through for [grace].
 class CloudReach extends Notifier<bool> {
   static const _key = 'cloud_reach';
+  static const grace = Duration(seconds: 30);
+  DateTime? _lastReached;
 
   @override
   bool build() => ref.read(prefsProvider).getBool(_key) ?? true;
 
-  void reached() => _set(true);
-  void unreachable() => _set(false);
+  void reached() {
+    _lastReached = DateTime.now();
+    _set(true);
+  }
+
+  void unreachable() {
+    final last = _lastReached;
+    if (last != null && DateTime.now().difference(last) < grace) return;
+    _set(false);
+  }
 
   void _set(bool v) {
     if (state == v) return;
