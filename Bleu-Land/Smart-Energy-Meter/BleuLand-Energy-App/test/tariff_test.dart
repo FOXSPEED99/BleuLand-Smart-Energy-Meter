@@ -63,4 +63,56 @@ void main() {
     expect(back.costFor(400), t.costFor(400));
     expect(back.periodMonths, 2);
   });
+
+  group('match your bill', () {
+    // Syrian cycle Sep–Oct 2026; matched on 21 Sep at noon
+    final period = BillingPeriod.containing(DateTime(2026, 10, 12), periodMonths: 2);
+    final at = DateTime(2026, 9, 21, 12);
+
+    test('cycle is Sep–Oct', () {
+      expect(period.start, DateTime(2026, 9, 1));
+      expect(period.end, DateTime(2026, 11, 1));
+    });
+    test('exact with the last bill reading', () {
+      final m = BillMatch(at: at, houseKwh: 12480, cycleStartKwh: 12300, meterKwh: 3.2);
+      final b = m.before(period)!;
+      expect(b.kwh, 180);
+      expect(b.estimated, isFalse);
+    });
+    test('estimated from daily use without it', () {
+      final m = BillMatch(at: at, houseKwh: 12480, meterKwh: 3.2);
+      final b = m.before(period, dailyKwh: 10)!;
+      expect(b.kwh, closeTo(205, 0.01)); // 20.5 days × 10
+      expect(b.estimated, isTrue);
+      expect(m.before(period), isNull); // nothing to go on yet
+    });
+    test('a bill reading above the house meter counts as 0', () {
+      final m = BillMatch(at: at, houseKwh: 100, cycleStartKwh: 150, meterKwh: 0);
+      expect(m.before(period)!.kwh, 0);
+    });
+    test('outside the cycle = the BleuLand meter measured it all', () {
+      final m = BillMatch(at: DateTime(2026, 8, 30), houseKwh: 1, cycleStartKwh: 0, meterKwh: 0);
+      expect(m.before(period), isNull);
+    });
+    test('house meter now follows the BleuLand counter', () {
+      final m = BillMatch(at: at, houseKwh: 12480, meterKwh: 3.2);
+      expect(m.houseNow(53.2), closeTo(12530, 1e-9));
+      expect(m.houseNow(1), 12480); // counter reset = no change
+    });
+    test('saved and read back with the tariff', () {
+      final m = BillMatch(at: at, houseKwh: 12480, cycleStartKwh: 12300, meterKwh: 3.2);
+      final back = Tariff.fromJson(t.copyWith(match: m).toJson()).match!;
+      expect(back.at, at);
+      expect(back.houseKwh, 12480);
+      expect(back.cycleStartKwh, 12300);
+      expect(back.meterKwh, 3.2);
+      expect(Tariff.fromJson(t.toJson()).match, isNull);
+    });
+    test('copyWith keeps or clears the match', () {
+      final m = BillMatch(at: at, houseKwh: 1, meterKwh: 0);
+      final withMatch = t.copyWith(match: m);
+      expect(withMatch.copyWith(periodMonths: 1).match, same(m));
+      expect(withMatch.copyWith(clearMatch: true).match, isNull);
+    });
+  });
 }

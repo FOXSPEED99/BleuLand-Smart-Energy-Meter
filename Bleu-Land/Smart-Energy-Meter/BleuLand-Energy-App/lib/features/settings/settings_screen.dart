@@ -45,6 +45,16 @@ class SettingsScreen extends ConsumerWidget {
                 value: meter.tariff.isSet ? _tariffSummary(meter) : 'Not set',
                 onTap: meter.isOwner ? () => context.push('/settings/tariff') : null,
               ),
+              // countries whose bills come from the utility meter's readings
+              if (meter.isOwner && !demo && regionById(ref.watch(regionProvider))?.billMatch == true)
+                _Row(
+                  icon: Icons.fact_check_rounded,
+                  title: 'Match your bill',
+                  value: meter.tariff.match == null
+                      ? 'Use your house meter to match the paper bill'
+                      : 'Matched with your house meter',
+                  onTap: () => context.push('/settings/bill-match'),
+                ),
               _Row(
                 icon: Icons.speed_rounded,
                 title: 'Normal voltage',

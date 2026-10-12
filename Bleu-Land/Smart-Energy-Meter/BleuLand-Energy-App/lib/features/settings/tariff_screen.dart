@@ -65,7 +65,8 @@ class _TariffScreenState extends ConsumerState<TariffScreen> {
       out.add(TariffTier(uptoKwh: upto, price: price));
       if (upto != null) last = upto;
     }
-    return Tariff(tiers: out, periodMonths: periodMonths);
+    // keep what this screen doesn't edit ("Match your bill")
+    return (meter?.tariff ?? Tariff.syriaHousehold).copyWith(tiers: out, periodMonths: periodMonths);
   }
 
   Future<void> _save() async {

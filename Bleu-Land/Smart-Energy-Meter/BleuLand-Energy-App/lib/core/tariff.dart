@@ -18,12 +18,74 @@ class TariffTier {
       );
 }
 
+/// "Match your bill" (Syria): numbers from the electricity company's own
+/// meter, so the bill here matches the paper bill even though the BleuLand
+/// meter was installed in the middle of a cycle. The house meter never goes
+/// back to zero, so:
+///   used before installing = house meter now - "current reading" on the
+///   last bill (that reading is where this cycle started).
+/// Without the last bill, the days before are estimated from the daily
+/// average measured since.
+class BillMatch {
+  const BillMatch({required this.at, required this.houseKwh, this.cycleStartKwh, required this.meterKwh});
+
+  final DateTime at; // when the house meter was read
+  final double houseKwh; // the house meter then
+  final double? cycleStartKwh; // "current reading" on the last bill
+  final double meterKwh; // the BleuLand meter's own counter then
+
+  /// kWh used in [period] before [at]: exact with the last bill's reading,
+  /// estimated from [dailyKwh] otherwise; null when [at] isn't in [period]
+  /// (the BleuLand meter then measured the whole cycle) or nothing to go on.
+  ({double kwh, bool estimated})? before(BillingPeriod period, {double? dailyKwh}) {
+    if (at.isBefore(period.start) || !at.isBefore(period.end)) return null;
+    if (cycleStartKwh != null) {
+      final used = houseKwh - cycleStartKwh!;
+      return (kwh: used < 0 ? 0 : used, estimated: false);
+    }
+    if (dailyKwh == null) return null;
+    return (kwh: dailyKwh * at.difference(period.start).inMinutes / 1440, estimated: true);
+  }
+
+  /// What the house meter should show when the BleuLand counter reads [meterNow].
+  double houseNow(double meterNow) => houseKwh + (meterNow > meterKwh ? meterNow - meterKwh : 0);
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'house_kwh': houseKwh,
+        if (cycleStartKwh != null) 'cycle_start_kwh': cycleStartKwh,
+        'meter_kwh': meterKwh,
+      };
+
+  static BillMatch? fromJson(Object? j) {
+    if (j is! Map) return null;
+    try {
+      return BillMatch(
+        at: DateTime.parse(j['at'] as String).toLocal(),
+        houseKwh: (j['house_kwh'] as num).toDouble(),
+        cycleStartKwh: (j['cycle_start_kwh'] as num?)?.toDouble(),
+        meterKwh: (j['meter_kwh'] as num).toDouble(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 class Tariff {
-  const Tariff({required this.tiers, this.fixedPerPeriod = 0, this.periodMonths = 1});
+  const Tariff({required this.tiers, this.fixedPerPeriod = 0, this.periodMonths = 1, this.match});
 
   final List<TariffTier> tiers;
   final double fixedPerPeriod;
   final int periodMonths;
+  final BillMatch? match; // "Match your bill", if set up
+
+  Tariff copyWith({List<TariffTier>? tiers, int? periodMonths, BillMatch? match, bool clearMatch = false}) => Tariff(
+        tiers: tiers ?? this.tiers,
+        fixedPerPeriod: fixedPerPeriod,
+        periodMonths: periodMonths ?? this.periodMonths,
+        match: clearMatch ? null : (match ?? this.match),
+      );
 
   static const syriaHousehold = Tariff(
     tiers: [TariffTier(uptoKwh: 300, price: 6), TariffTier(price: 14)],
@@ -36,6 +98,7 @@ class Tariff {
         'tiers': tiers.map((t) => t.toJson()).toList(),
         'fixed_per_period': fixedPerPeriod,
         'period_months': periodMonths,
+        if (match != null) 'bill_match': match!.toJson(),
       };
 
   factory Tariff.fromJson(Map<String, dynamic>? j) {
@@ -46,6 +109,7 @@ class Tariff {
           .toList(),
       fixedPerPeriod: (j['fixed_per_period'] as num?)?.toDouble() ?? 0,
       periodMonths: (j['period_months'] as num?)?.toInt() ?? 1,
+      match: BillMatch.fromJson(j['bill_match']),
     );
   }
 

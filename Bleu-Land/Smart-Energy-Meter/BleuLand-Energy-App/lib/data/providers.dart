@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Bucket;
 
+import '../core/region.dart';
 import '../core/tariff.dart';
 import 'demo_repository.dart';
 import 'models.dart';
@@ -181,6 +182,9 @@ class CycleSummary {
     required this.projectedCost,
     required this.tier,
     this.tierCrossDate,
+    this.beforeKwh,
+    this.beforeEstimated = false,
+    this.measuredKwh,
   });
 
   final BillingPeriod period;
@@ -189,6 +193,11 @@ class CycleSummary {
   final double projectedKwh, projectedCost; // at this pace, by the end of the period
   final TierPosition tier;
   final DateTime? tierCrossDate; // when the cheap block will run out, at this pace
+  // "Match your bill" in this cycle: used before the BleuLand meter (from the
+  // house meter, or estimated) + measured by it since
+  final double? beforeKwh;
+  final bool beforeEstimated;
+  final double? measuredKwh;
 }
 
 final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) async {
@@ -207,6 +216,25 @@ final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) asyn
     if (!d.start.isBefore(period.start)) kwh += d.kwh;
     if (d.start == today) todayKwh = d.kwh;
     if (d.start == yesterday) yesterdayKwh = d.kwh;
+  }
+
+  // "Match your bill" (where the country supports it): the part of the cycle
+  // before the house meter was read comes from its numbers, the rest from
+  // what the BleuLand meter measured since
+  double? beforeKwh, measuredKwh;
+  var beforeEstimated = false;
+  final match = regionById(ref.watch(regionProvider))?.billMatch == true ? t.match : null;
+  if (match != null && !match.at.isBefore(period.start) && match.at.isBefore(now)) {
+    final since = await repo.energy(id, match.at, now, Bucket.hour);
+    final sinceKwh = since.fold(0.0, (s, p) => s + p.kwh);
+    final hours = now.difference(match.at).inMinutes / 60;
+    final before = match.before(period, dailyKwh: hours >= 12 ? sinceKwh / hours * 24 : null);
+    if (before != null) {
+      kwh = before.kwh + sinceKwh;
+      beforeKwh = before.kwh;
+      beforeEstimated = before.estimated;
+      measuredKwh = sinceKwh;
+    }
   }
 
   final elapsed = now.difference(period.start).inMinutes / (24 * 60);
@@ -231,5 +259,8 @@ final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) asyn
     projectedCost: t.costFor(projected),
     tier: tier,
     tierCrossDate: cross,
+    beforeKwh: beforeKwh,
+    beforeEstimated: beforeEstimated,
+    measuredKwh: measuredKwh,
   );
 });
