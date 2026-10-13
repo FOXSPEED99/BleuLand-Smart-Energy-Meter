@@ -267,6 +267,21 @@ class CycleSummary {
   final double? measuredKwh;
 }
 
+/// A normal day's use, for estimating days the meter didn't see: the
+/// average of whole days it measured. Not today (still going), and not the
+/// first day with data (it started part-way through, at install or after a
+/// reset). Null until there's at least one such day: a few hours say little,
+/// as nights and evenings differ a lot.
+double? typicalDailyKwh(List<EnergyPoint> days, DateTime today) {
+  final measured = [
+    for (final d in [...days]..sort((a, b) => a.start.compareTo(b.start)))
+      if (d.kwh > 0 && d.start.isBefore(today)) d.kwh,
+  ];
+  if (measured.length < 2) return null;
+  final whole = measured.sublist(1);
+  return whole.reduce((a, b) => a + b) / whole.length;
+}
+
 final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) async {
   final meter = (await ref.watch(metersProvider.future)).firstWhere((m) => m.id == id);
   final repo = ref.watch(repositoryProvider);
@@ -294,8 +309,7 @@ final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) asyn
   if (match != null && !match.at.isBefore(period.start) && match.at.isBefore(now)) {
     final since = await repo.energy(id, match.at, now, Bucket.hour);
     final sinceKwh = since.fold(0.0, (s, p) => s + p.kwh);
-    final hours = now.difference(match.at).inMinutes / 60;
-    final before = match.before(period, dailyKwh: hours >= 12 ? sinceKwh / hours * 24 : null);
+    final before = match.before(period, dailyKwh: typicalDailyKwh(days, today));
     if (before != null) {
       kwh = before.kwh + sinceKwh;
       beforeKwh = before.kwh;

@@ -68,12 +68,13 @@ class BillCard extends ConsumerWidget {
           ),
         ]),
         const SizedBox(height: S.lg),
-        // energy and cost side by side, equal weight
+        // energy and cost side by side, equal weight; "≈" while "Match your
+        // bill" estimates the days before the meter
         IntrinsicHeight(
           child: Row(children: [
-            stat('Used', fmtKwh(cycle.kwh, unit: false), 'kWh'),
+            stat('Used', '${cycle.beforeEstimated ? '≈' : ''}${fmtKwh(cycle.kwh, unit: false)}', 'kWh'),
             Container(width: 1, color: C.outline, margin: const EdgeInsets.symmetric(horizontal: S.lg)),
-            stat('Cost', fmtMoney(cycle.cost, '').trim(), cur),
+            stat('Cost', '${cycle.beforeEstimated ? '≈' : ''}${fmtMoney(cycle.cost, '').trim()}', cur),
           ]),
         ),
         if (firstLimit != null) ...[
