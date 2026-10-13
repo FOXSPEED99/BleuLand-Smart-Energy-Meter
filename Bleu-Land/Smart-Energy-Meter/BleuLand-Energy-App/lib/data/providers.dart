@@ -309,7 +309,12 @@ final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) asyn
   if (match != null && !match.at.isBefore(period.start) && match.at.isBefore(now)) {
     final since = await repo.energy(id, match.at, now, Bucket.hour);
     final sinceKwh = since.fold(0.0, (s, p) => s + p.kwh);
-    final before = match.before(period, dailyKwh: typicalDailyKwh(days, today));
+    // without the bill's reading, the days before are estimated: from the
+    // last bill (two months of real use) if given, else from the meter's days
+    final daily = match.lastBillAmount != null
+        ? t.dailyFromLastBill(match.lastBillAmount!, period, billingDay: meter.billingDay)
+        : typicalDailyKwh(days, today);
+    final before = match.before(period, dailyKwh: daily);
     if (before != null) {
       kwh = before.kwh + sinceKwh;
       beforeKwh = before.kwh;

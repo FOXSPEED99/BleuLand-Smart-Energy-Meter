@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -9,6 +8,7 @@ import '../../core/tariff.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/number_input.dart';
 import '../../widgets/ui.dart';
 
 /// "Match your bill" (Syria): two numbers from the electricity company's
@@ -23,16 +23,19 @@ class BillMatchScreen extends ConsumerStatefulWidget {
 class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
   final _house = TextEditingController();
   final _lastBill = TextEditingController();
+  final _amount = TextEditingController();
   bool _editing = false;
   bool _saving = false;
 
   static final _n = NumberFormat('#,##0');
+  static final _money = NumberFormat('#,##0.##');
   static double? _parse(String s) => double.tryParse(s.replaceAll(RegExp(r'[,\s]'), ''));
 
   @override
   void dispose() {
     _house.dispose();
     _lastBill.dispose();
+    _amount.dispose();
     super.dispose();
   }
 
@@ -47,13 +50,23 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
       return _toast('The last bill\'s reading can\'t be higher than the meter shows now.');
     }
     if (last != null && house - last > 20000) return _toast('That\'s more than 20,000 kWh apart: check both numbers.');
+    final amount = _amount.text.trim().isEmpty ? null : _parse(_amount.text);
+    if (_amount.text.trim().isNotEmpty && (amount == null || amount <= 0)) {
+      return _toast('Check the amount of your last bill.');
+    }
     // the BleuLand meter's own counter right now, to follow the house meter from here
     final live = ref.read(liveProvider(m.id)).value;
     if (live == null || DateTime.now().difference(live.ts) > const Duration(minutes: 10)) {
       return _toast('Your BleuLand meter needs to be online to match the bill.');
     }
     setState(() => _saving = true);
-    final match = BillMatch(at: DateTime.now(), houseKwh: house, cycleStartKwh: last, meterKwh: live.kwhTotal);
+    final match = BillMatch(
+      at: DateTime.now(),
+      houseKwh: house,
+      cycleStartKwh: last,
+      lastBillAmount: amount,
+      meterKwh: live.kwhTotal,
+    );
     try {
       // Syrian bills: 2-month cycles starting on the 1st of odd months
       await ref.read(repositoryProvider).updateMeter(
@@ -132,9 +145,18 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
       _field(
         controller: _lastBill,
         label: 'Last bill: current reading (optional)',
-        help: 'Printed on your last paper bill. That\'s where this cycle started. Without it, the days before '
-            'are estimated from your daily use.',
+        help: 'Printed on your last paper bill. That\'s where this cycle started, so the bill here is exact.',
         icon: Icons.receipt_long_rounded,
+      ),
+      const SizedBox(height: S.lg),
+      _field(
+        controller: _amount,
+        label: 'Last bill: amount paid (optional)',
+        help: 'No reading? What you paid for your last bill (e.g. in Sham Cash) tells how much you use a day, '
+            'to estimate the days before your meter.',
+        icon: Icons.payments_rounded,
+        suffix: m.currency,
+        decimals: 2,
       ),
       const SizedBox(height: S.xl),
       FilledButton(
@@ -161,17 +183,20 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
     required String label,
     required String help,
     required IconData icon,
+    String suffix = 'kWh',
+    int decimals = 0,
   }) =>
       TextField(
         controller: controller,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+        keyboardType: TextInputType.numberWithOptions(decimal: decimals > 0),
+        // "106,469" while typing, not "106469"
+        inputFormatters: [GroupedNumberFormatter(decimals: decimals)],
         decoration: InputDecoration(
           labelText: label,
           helperText: help,
           helperMaxLines: 3,
           prefixIcon: Icon(icon),
-          suffixText: 'kWh',
+          suffixText: suffix,
         ),
       );
 
@@ -218,9 +243,11 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
             row(
               'Before your BleuLand meter',
               '${cycle.beforeEstimated ? '≈ ' : ''}${fmtKwh(cycle.beforeKwh!)}',
-              note: cycle.beforeEstimated
-                  ? 'Estimated from your daily use (no last-bill reading)'
-                  : 'From your house meter and last bill',
+              note: !cycle.beforeEstimated
+                  ? 'From your house meter and last bill'
+                  : match.lastBillAmount != null
+                      ? 'Estimated from your last bill (≈ ${fmtKwh(m.tariff.kwhFor(match.lastBillAmount!))})'
+                      : 'Estimated from your daily use',
             ),
             row('Measured since ${day.format(match.at)}', fmtKwh(cycle.measuredKwh ?? 0)),
             const Divider(),
@@ -259,8 +286,9 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
       OutlinedButton(
         onPressed: () => setState(() {
           _editing = true;
-          _house.clear();
-          _lastBill.clear();
+          _house.clear(); // refilled with what it should read now
+          _lastBill.text = match.cycleStartKwh == null ? '' : _n.format(match.cycleStartKwh);
+          _amount.text = match.lastBillAmount == null ? '' : _money.format(match.lastBillAmount);
         }),
         child: const Text('Update the numbers'),
       ),

@@ -144,4 +144,21 @@ void main() {
       expect(c[DateTime(2026, 9, 22)], 10 * 14);
     });
   });
+
+  group('from a bill amount back to kWh', () {
+    test('inside the cheap block', () => expect(t.kwhFor(1431.69), closeTo(238.615, 1e-9)));
+    test('across the blocks', () {
+      expect(t.kwhFor(300 * 6 + 100 * 14), closeTo(400, 1e-9));
+      expect(t.kwhFor(t.costFor(681)), closeTo(681, 1e-9));
+    });
+    test('nothing paid, nothing used', () => expect(t.kwhFor(0), 0));
+    test('a day from the last bill: its kWh over the cycle before (Jul–Aug, 62 days)', () {
+      final now = BillingPeriod.containing(DateTime(2026, 10, 13), periodMonths: 2);
+      expect(t.dailyFromLastBill(62 * 4 * 6, now), closeTo(4, 1e-9));
+    });
+    test('saved with the match', () {
+      final m = BillMatch(at: DateTime(2026, 10, 12), houseKwh: 1, lastBillAmount: 1431.69, meterKwh: 0);
+      expect(Tariff.fromJson(t.copyWith(match: m).toJson()).match!.lastBillAmount, 1431.69);
+    });
+  });
 }

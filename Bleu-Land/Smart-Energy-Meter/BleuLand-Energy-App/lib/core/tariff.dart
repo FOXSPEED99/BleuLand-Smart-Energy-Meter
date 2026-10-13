@@ -27,11 +27,18 @@ class TariffTier {
 /// Without the last bill, the days before are estimated from the daily
 /// average measured since.
 class BillMatch {
-  const BillMatch({required this.at, required this.houseKwh, this.cycleStartKwh, required this.meterKwh});
+  const BillMatch({
+    required this.at,
+    required this.houseKwh,
+    this.cycleStartKwh,
+    this.lastBillAmount,
+    required this.meterKwh,
+  });
 
   final DateTime at; // when the house meter was read
   final double houseKwh; // the house meter then
   final double? cycleStartKwh; // "current reading" on the last bill
+  final double? lastBillAmount; // what the last bill cost (e.g. paid in Sham Cash)
   final double meterKwh; // the BleuLand meter's own counter then
 
   /// kWh used in [period] before [at]: exact with the last bill's reading,
@@ -54,6 +61,7 @@ class BillMatch {
         'at': at.toUtc().toIso8601String(),
         'house_kwh': houseKwh,
         if (cycleStartKwh != null) 'cycle_start_kwh': cycleStartKwh,
+        if (lastBillAmount != null) 'last_bill_amount': lastBillAmount,
         'meter_kwh': meterKwh,
       };
 
@@ -64,6 +72,7 @@ class BillMatch {
         at: DateTime.parse(j['at'] as String).toLocal(),
         houseKwh: (j['house_kwh'] as num).toDouble(),
         cycleStartKwh: (j['cycle_start_kwh'] as num?)?.toDouble(),
+        lastBillAmount: (j['last_bill_amount'] as num?)?.toDouble(),
         meterKwh: (j['meter_kwh'] as num).toDouble(),
       );
     } catch (_) {
@@ -130,6 +139,34 @@ class Tariff {
   /// Extra cost of the next [kwh], given [usedSoFar] kWh already this period
   /// (e.g. "today cost" = costFor(used incl. today) - costFor(used before today)).
   double marginalCost(double usedSoFar, double kwh) => costFor(usedSoFar + kwh) - costFor(usedSoFar);
+
+  /// The other way round: how many kWh a bill of [amount] paid for, block
+  /// by block (≈: a real bill may add small fees on top).
+  double kwhFor(double amount) {
+    var left = amount - fixedPerPeriod;
+    if (!isSet || left <= 0) return 0;
+    double done = 0;
+    for (final t in tiers) {
+      final size = (t.uptoKwh ?? double.infinity) - done;
+      if (t.price <= 0) return t.uptoKwh ?? done; // free block: can't tell how far it went
+      final inTier = left / t.price;
+      if (inTier <= size) return done + inTier;
+      left -= size * t.price;
+      done += size;
+    }
+    return done;
+  }
+
+  /// A day's use going by the last bill: its kWh over the days of the cycle
+  /// before [current] (the one that bill was for).
+  double dailyFromLastBill(double amount, BillingPeriod current, {int billingDay = 1}) {
+    final last = BillingPeriod.containing(
+      current.start.subtract(const Duration(days: 1)),
+      billingDay: billingDay,
+      periodMonths: periodMonths,
+    );
+    return kwhFor(amount) / last.days;
+  }
 
   /// What each slice of [usage] added to the bill. Price blocks restart every
   /// billing cycle, so the same kWh is cheap early in a cycle and dear once
