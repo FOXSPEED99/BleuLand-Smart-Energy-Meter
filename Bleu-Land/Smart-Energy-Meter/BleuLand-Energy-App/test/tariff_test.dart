@@ -75,20 +75,15 @@ void main() {
     });
     test('exact with the last bill reading', () {
       final m = BillMatch(at: at, houseKwh: 12480, cycleStartKwh: 12300, meterKwh: 3.2);
-      final b = m.before(period)!;
-      expect(b.kwh, 180);
-      expect(b.estimated, isFalse);
+      expect(m.before(period), 180);
     });
-    test('estimated from daily use without it', () {
+    test('no guessing without it', () {
       final m = BillMatch(at: at, houseKwh: 12480, meterKwh: 3.2);
-      final b = m.before(period, dailyKwh: 10)!;
-      expect(b.kwh, closeTo(205, 0.01)); // 20.5 days × 10
-      expect(b.estimated, isTrue);
-      expect(m.before(period), isNull); // nothing to go on yet
+      expect(m.before(period), isNull);
     });
     test('a bill reading above the house meter counts as 0', () {
       final m = BillMatch(at: at, houseKwh: 100, cycleStartKwh: 150, meterKwh: 0);
-      expect(m.before(period)!.kwh, 0);
+      expect(m.before(period), 0);
     });
     test('outside the cycle = the BleuLand meter measured it all', () {
       final m = BillMatch(at: DateTime(2026, 8, 30), houseKwh: 1, cycleStartKwh: 0, meterKwh: 0);
@@ -142,23 +137,6 @@ void main() {
       expect(c[DateTime(2026, 9, 20)], 30); // before the match: what the meter saw
       expect(c[DateTime(2026, 9, 21)], 5 * 6 + 5 * 14); // 295 → 305
       expect(c[DateTime(2026, 9, 22)], 10 * 14);
-    });
-  });
-
-  group('from a bill amount back to kWh', () {
-    test('inside the cheap block', () => expect(t.kwhFor(1431.69), closeTo(238.615, 1e-9)));
-    test('across the blocks', () {
-      expect(t.kwhFor(300 * 6 + 100 * 14), closeTo(400, 1e-9));
-      expect(t.kwhFor(t.costFor(681)), closeTo(681, 1e-9));
-    });
-    test('nothing paid, nothing used', () => expect(t.kwhFor(0), 0));
-    test('a day from the last bill: its kWh over the cycle before (Jul–Aug, 62 days)', () {
-      final now = BillingPeriod.containing(DateTime(2026, 10, 13), periodMonths: 2);
-      expect(t.dailyFromLastBill(62 * 4 * 6, now), closeTo(4, 1e-9));
-    });
-    test('saved with the match', () {
-      final m = BillMatch(at: DateTime(2026, 10, 12), houseKwh: 1, lastBillAmount: 1431.69, meterKwh: 0);
-      expect(Tariff.fromJson(t.copyWith(match: m).toJson()).match!.lastBillAmount, 1431.69);
     });
   });
 }

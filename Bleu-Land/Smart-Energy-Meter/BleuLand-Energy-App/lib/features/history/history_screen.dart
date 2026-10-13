@@ -184,7 +184,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         sub: cost == null || total <= 0
                             ? null
                             : Text(
-                                '≈ ${fmtMoney(cost / total, '').trim()} ${meter.currency} per kWh',
+                                'Average ${fmtMoney(cost / total, '').trim()} ${meter.currency}/kWh',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: t.labelSmall?.copyWith(color: C.text2),

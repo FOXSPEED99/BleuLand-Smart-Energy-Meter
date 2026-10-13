@@ -250,7 +250,6 @@ class CycleSummary {
     required this.tier,
     this.tierCrossDate,
     this.beforeKwh,
-    this.beforeEstimated = false,
     this.measuredKwh,
   });
 
@@ -260,26 +259,10 @@ class CycleSummary {
   final double projectedKwh, projectedCost; // at this pace, by the end of the period
   final TierPosition tier;
   final DateTime? tierCrossDate; // when the cheap block will run out, at this pace
-  // "Match your bill" in this cycle: used before the BleuLand meter (from the
-  // house meter, or estimated) + measured by it since
+  // "Match your bill" in this cycle: used before the BleuLand meter (house
+  // meter - last bill's reading) + measured by it since
   final double? beforeKwh;
-  final bool beforeEstimated;
   final double? measuredKwh;
-}
-
-/// A normal day's use, for estimating days the meter didn't see: the
-/// average of whole days it measured. Not today (still going), and not the
-/// first day with data (it started part-way through, at install or after a
-/// reset). Null until there's at least one such day: a few hours say little,
-/// as nights and evenings differ a lot.
-double? typicalDailyKwh(List<EnergyPoint> days, DateTime today) {
-  final measured = [
-    for (final d in [...days]..sort((a, b) => a.start.compareTo(b.start)))
-      if (d.kwh > 0 && d.start.isBefore(today)) d.kwh,
-  ];
-  if (measured.length < 2) return null;
-  final whole = measured.sublist(1);
-  return whole.reduce((a, b) => a + b) / whole.length;
 }
 
 final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) async {
@@ -304,23 +287,13 @@ final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) asyn
   // before the house meter was read comes from its numbers, the rest from
   // what the BleuLand meter measured since
   double? beforeKwh, measuredKwh;
-  var beforeEstimated = false;
   final match = regionById(ref.watch(regionProvider))?.billMatch == true ? t.match : null;
-  if (match != null && !match.at.isBefore(period.start) && match.at.isBefore(now)) {
-    final since = await repo.energy(id, match.at, now, Bucket.hour);
-    final sinceKwh = since.fold(0.0, (s, p) => s + p.kwh);
-    // without the bill's reading, the days before are estimated: from the
-    // last bill (two months of real use) if given, else from the meter's days
-    final daily = match.lastBillAmount != null
-        ? t.dailyFromLastBill(match.lastBillAmount!, period, billingDay: meter.billingDay)
-        : typicalDailyKwh(days, today);
-    final before = match.before(period, dailyKwh: daily);
-    if (before != null) {
-      kwh = before.kwh + sinceKwh;
-      beforeKwh = before.kwh;
-      beforeEstimated = before.estimated;
-      measuredKwh = sinceKwh;
-    }
+  final before = match == null || !match.at.isBefore(now) ? null : match.before(period);
+  if (before != null) {
+    final since = await repo.energy(id, match!.at, now, Bucket.hour);
+    measuredKwh = since.fold<double>(0, (s, p) => s + p.kwh);
+    beforeKwh = before;
+    kwh = before + measuredKwh;
   }
 
   final elapsed = now.difference(period.start).inMinutes / (24 * 60);
@@ -346,7 +319,6 @@ final cycleProvider = FutureProvider.family<CycleSummary, String>((ref, id) asyn
     tier: tier,
     tierCrossDate: cross,
     beforeKwh: beforeKwh,
-    beforeEstimated: beforeEstimated,
     measuredKwh: measuredKwh,
   );
 });

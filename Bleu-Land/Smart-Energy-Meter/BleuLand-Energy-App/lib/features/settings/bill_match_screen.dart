@@ -23,19 +23,16 @@ class BillMatchScreen extends ConsumerStatefulWidget {
 class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
   final _house = TextEditingController();
   final _lastBill = TextEditingController();
-  final _amount = TextEditingController();
   bool _editing = false;
   bool _saving = false;
 
   static final _n = NumberFormat('#,##0');
-  static final _money = NumberFormat('#,##0.##');
   static double? _parse(String s) => double.tryParse(s.replaceAll(RegExp(r'[,\s]'), ''));
 
   @override
   void dispose() {
     _house.dispose();
     _lastBill.dispose();
-    _amount.dispose();
     super.dispose();
   }
 
@@ -43,17 +40,11 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
 
   Future<void> _save(Meter m) async {
     final house = _parse(_house.text);
-    final last = _lastBill.text.trim().isEmpty ? null : _parse(_lastBill.text);
+    final last = _parse(_lastBill.text);
     if (house == null || house <= 0) return _toast('Enter the number on your house meter.');
-    if (_lastBill.text.trim().isNotEmpty && last == null) return _toast('Check the reading from your last bill.');
-    if (last != null && last > house) {
-      return _toast('The last bill\'s reading can\'t be higher than the meter shows now.');
-    }
-    if (last != null && house - last > 20000) return _toast('That\'s more than 20,000 kWh apart: check both numbers.');
-    final amount = _amount.text.trim().isEmpty ? null : _parse(_amount.text);
-    if (_amount.text.trim().isNotEmpty && (amount == null || amount <= 0)) {
-      return _toast('Check the amount of your last bill.');
-    }
+    if (last == null || last <= 0) return _toast('Enter the current reading from your last bill.');
+    if (last > house) return _toast('The last bill\'s reading can\'t be higher than the meter shows now.');
+    if (house - last > 20000) return _toast('That\'s more than 20,000 kWh apart: check both numbers.');
     // the BleuLand meter's own counter right now, to follow the house meter from here
     final live = ref.read(liveProvider(m.id)).value;
     if (live == null || DateTime.now().difference(live.ts) > const Duration(minutes: 10)) {
@@ -64,7 +55,6 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
       at: DateTime.now(),
       houseKwh: house,
       cycleStartKwh: last,
-      lastBillAmount: amount,
       meterKwh: live.kwhTotal,
     );
     try {
@@ -131,32 +121,23 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
     return [
       Text(
         'Make the bill here match your paper bill. Your BleuLand meter started in the middle of a cycle, so '
-        'it didn\'t see the days before. Your house meter (the electricity company\'s) did.',
+        'it didn\'t see the days before. Your house meter (the electricity company\'s) did: two numbers from '
+        'it make the bill exact.',
         style: t.bodyMedium?.copyWith(color: C.text2),
       ),
       const SizedBox(height: S.xl),
       _field(
         controller: _house,
         label: 'House meter now',
-        help: 'The number on the electricity company\'s meter today.',
+        help: 'The number on the electricity company\'s meter today (the screen marked 1.8.0).',
         icon: Icons.speed_rounded,
       ),
       const SizedBox(height: S.lg),
       _field(
         controller: _lastBill,
-        label: 'Last bill: current reading (optional)',
-        help: 'Printed on your last paper bill. That\'s where this cycle started, so the bill here is exact.',
+        label: 'Last bill: current reading',
+        help: 'The "current reading" printed on your last paper bill: where this cycle started.',
         icon: Icons.receipt_long_rounded,
-      ),
-      const SizedBox(height: S.lg),
-      _field(
-        controller: _amount,
-        label: 'Last bill: amount paid (optional)',
-        help: 'No reading? What you paid for your last bill (e.g. in Sham Cash) tells how much you use a day, '
-            'to estimate the days before your meter.',
-        icon: Icons.payments_rounded,
-        suffix: m.currency,
-        decimals: 2,
       ),
       const SizedBox(height: S.xl),
       FilledButton(
@@ -208,6 +189,7 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
     final live = ref.watch(liveProvider(m.id)).value;
     final day = DateFormat('d MMM');
     final inThisCycle = cycle != null && cycle.beforeKwh != null;
+    final complete = match.cycleStartKwh != null; // matched before the reading was required
     Widget row(String label, String value, {bool strong = false, String? note}) => Padding(
           padding: const EdgeInsets.symmetric(vertical: S.sm),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -225,14 +207,24 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
         padding: const EdgeInsets.all(S.xl),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Icon(Icons.check_circle_rounded, color: C.goodText, size: 20),
+            Icon(
+              complete ? Icons.check_circle_rounded : Icons.info_rounded,
+              color: complete ? C.goodText : C.warning,
+              size: 20,
+            ),
             const SizedBox(width: S.sm),
-            Text('Bill matched', style: t.titleMedium),
+            Text(complete ? 'Bill matched' : 'One number missing', style: t.titleMedium),
           ]),
           const SizedBox(height: S.xs),
           Text('Numbers from ${day.format(match.at)}', style: t.bodySmall?.copyWith(color: C.text3)),
           const SizedBox(height: S.lg),
-          if (cycle == null)
+          if (!complete)
+            Text(
+              'Add the current reading from your last bill. Until then the bill counts only what your BleuLand '
+              'meter measured.',
+              style: t.bodyMedium?.copyWith(color: C.text2),
+            )
+          else if (cycle == null)
             const Padding(padding: EdgeInsets.all(S.md), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
           else if (inThisCycle) ...[
             Text(
@@ -242,12 +234,8 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
             const SizedBox(height: S.xs),
             row(
               'Before your BleuLand meter',
-              '${cycle.beforeEstimated ? '≈ ' : ''}${fmtKwh(cycle.beforeKwh!)}',
-              note: !cycle.beforeEstimated
-                  ? 'From your house meter and last bill'
-                  : match.lastBillAmount != null
-                      ? 'Estimated from your last bill (≈ ${fmtKwh(m.tariff.kwhFor(match.lastBillAmount!))})'
-                      : 'Estimated from your daily use',
+              fmtKwh(cycle.beforeKwh!),
+              note: '${_n.format(match.houseKwh)} − ${_n.format(match.cycleStartKwh)} on your house meter',
             ),
             row('Measured since ${day.format(match.at)}', fmtKwh(cycle.measuredKwh ?? 0)),
             const Divider(),
@@ -266,7 +254,7 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
           Text('Your house meter should read', style: t.labelMedium?.copyWith(color: C.text2)),
           const SizedBox(height: S.xs),
           Text(
-            live == null ? '—' : '≈ ${_n.format(match.houseNow(live.kwhTotal))} kWh',
+            live == null ? '—' : '${_n.format(match.houseNow(live.kwhTotal))} kWh',
             style: t.headlineSmall,
           ),
           const SizedBox(height: S.sm),
@@ -288,9 +276,8 @@ class _BillMatchScreenState extends ConsumerState<BillMatchScreen> {
           _editing = true;
           _house.clear(); // refilled with what it should read now
           _lastBill.text = match.cycleStartKwh == null ? '' : _n.format(match.cycleStartKwh);
-          _amount.text = match.lastBillAmount == null ? '' : _money.format(match.lastBillAmount);
         }),
-        child: const Text('Update the numbers'),
+        child: Text(complete ? 'Update the numbers' : 'Add the reading'),
       ),
       const SizedBox(height: S.sm),
       TextButton(
