@@ -320,22 +320,22 @@ class ErrorPanel extends StatelessWidget {
       );
 }
 
-/// The round bolt mark from the front label.
+/// The Bleu Land logo mark (the app icon).
 class BrandMark extends StatelessWidget {
   const BrandMark({super.key, this.size = 56});
   final double size;
 
+  // the Bleu Land logo, as on the app icon (tool/make_icon.py)
   @override
   Widget build(BuildContext context) => Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: const Color(0xFF242A30),
-          border: Border.all(color: C.brand, width: size * 0.06),
-          boxShadow: [BoxShadow(color: C.brand.withValues(alpha: 0.25), blurRadius: size * 0.5)],
+          borderRadius: BorderRadius.circular(size * 0.24),
+          boxShadow: [BoxShadow(color: const Color(0xFF00C8FF).withValues(alpha: 0.18), blurRadius: size * 0.4)],
         ),
-        child: Icon(Icons.bolt_rounded, color: C.brand, size: size * 0.6),
+        clipBehavior: Clip.antiAlias,
+        child: Image.asset('assets/images/logo_mark.png', width: size, height: size, filterQuality: FilterQuality.medium),
       );
 }
 

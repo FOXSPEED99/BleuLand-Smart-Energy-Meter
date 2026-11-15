@@ -44,11 +44,12 @@ flutter:
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
 
-# App icon: the bolt mark from the Bleu Meter front label (dart run flutter_launcher_icons)
+# App icon: the Bleu Land logo. Made by tool/make_icon.py (it writes the Android files too);
+# flutter_launcher_icons with these settings gives the same result
 flutter_launcher_icons:
   image_path: assets/images/icon.png
   android: true
-  adaptive_icon_background: "#0E1114"
+  adaptive_icon_background: "#000019"
   adaptive_icon_foreground: assets/images/icon_foreground.png
   ios: true
   remove_alpha_ios: true
