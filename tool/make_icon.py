@@ -8,7 +8,8 @@ phone writes the app name under the icon anyway.
 """
 from PIL import Image, ImageDraw
 
-BG = (0, 0, 25)                      # the logo's navy, #000019
+LOGO_BG = (0, 0, 25)                 # the navy in the logo file, #000019
+BG = (16, 32, 72)                    # icon background: the same navy, lighter so it stands out on black, #102048
 SYMBOL_BOX = (524, 324, 1482, 1676)  # the circuit "B" in the source, incl. its glow
 TEXT_BOX = (552, 510, 606, 1478)     # the vertical text, painted over
 
@@ -18,8 +19,18 @@ DENSITIES = {'mdpi': 1, 'hdpi': 1.5, 'xhdpi': 2, 'xxhdpi': 3, 'xxxhdpi': 4}
 
 def mark():
     im = Image.open('tool/brand/bleuland_logo.webp').convert('RGB')
-    ImageDraw.Draw(im).rectangle(TEXT_BOX, fill=BG)
-    return im.crop(SYMBOL_BOX)
+    ImageDraw.Draw(im).rectangle(TEXT_BOX, fill=LOGO_BG)
+    im = im.crop(SYMBOL_BOX)
+    # put the symbol on the new background: each pixel is part symbol, part
+    # logo navy; swap only the navy part (keeps the glow and shading)
+    px = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            p = px[x, y]
+            a = max(max(0, p[c] - LOGO_BG[c]) / (255 - LOGO_BG[c]) for c in range(3))
+            a = min(1.0, a)
+            px[x, y] = tuple(round(p[c] + (1 - a) * (BG[c] - LOGO_BG[c])) for c in range(3))
+    return im
 
 
 def square(sym, side, height_frac, radius_frac=0.0):
@@ -38,15 +49,16 @@ def square(sym, side, height_frac, radius_frac=0.0):
 def main():
     sym = mark()
     # Adaptive icon (Android 8+): ic_launcher.xml insets the foreground by 16 %,
-    # so a symbol 74 % tall here ends up ~50 % of the icon: inside the 66 dp
-    # safe circle every launcher shape keeps.
+    # so a symbol 62 % tall here ends up ~42 % of the layer (~63 % of the
+    # visible icon), well inside the 66 dp safe circle, with room around it.
+    FG = 0.62
     for d, k in DENSITIES.items():
-        square(sym, round(108 * k), 0.74).save(f'{RES}/drawable-{d}/ic_launcher_foreground.png')
+        square(sym, round(108 * k), FG).save(f'{RES}/drawable-{d}/ic_launcher_foreground.png')
         # older Androids (6-7): a ready-made rounded square
-        square(sym, round(48 * k), 0.66, 0.2).save(f'{RES}/mipmap-{d}/ic_launcher.png')
-    square(sym, 1024, 0.74).save('assets/images/icon_foreground.png')
-    square(sym, 1024, 0.66).save('assets/images/icon.png')
-    square(sym, 512, 0.72).save('assets/images/logo_mark.png')  # in-app logo (BrandMark)
+        square(sym, round(48 * k), 0.56, 0.2).save(f'{RES}/mipmap-{d}/ic_launcher.png')
+    square(sym, 1024, FG).save('assets/images/icon_foreground.png')
+    square(sym, 1024, 0.56).save('assets/images/icon.png')
+    square(sym, 512, 0.64).save('assets/images/logo_mark.png')  # in-app logo (BrandMark)
 
 
 if __name__ == '__main__':
