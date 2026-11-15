@@ -1,5 +1,5 @@
-import 'package:bleuland_energy/data/models.dart';
-import 'package:bleuland_energy/widgets/charts.dart';
+import 'package:bleu_home/data/models.dart';
+import 'package:bleu_home/widgets/charts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

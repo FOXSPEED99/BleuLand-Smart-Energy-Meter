@@ -1,11 +1,11 @@
 // Cloud connection. The publishable key is meant to ship inside the app:
 // every table is protected by row-level security on the server.
 abstract final class AppConfig {
-  static const appName = 'BleuLand Energy';
+  static const appName = 'Bleu Home';
   static const supabaseUrl = 'https://rmgzpxwpowwzqewmiyaw.supabase.co';
   static const supabaseKey = 'sb_publishable_2_MDRTqxogkVNA97djRs3Q_J3PrFZ7_';
 
-  /// Bluetooth name prefix of an SEM-1 waiting for WiFi setup.
+  /// Bluetooth name prefix of a Bleu Meter waiting for WiFi setup (its serial, "SEM1_8B6204").
   static const blePrefix = 'SEM1_';
 
   /// A meter that hasn't reported for this long is shown as offline. It

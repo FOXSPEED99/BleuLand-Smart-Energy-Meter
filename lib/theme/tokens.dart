@@ -1,5 +1,5 @@
 // Design tokens: every colour, size and radius the app uses lives here.
-// Dark theme only (brand decision). Colours come from the SEM-1 front label
+// Dark theme only (brand decision). Colours come from the Bleu Meter front label
 // (teal accent on charcoal) and were checked with the data-viz palette
 // validator against the card surface.
 import 'package:flutter/material.dart';

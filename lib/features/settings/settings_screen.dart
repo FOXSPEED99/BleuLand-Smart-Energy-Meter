@@ -240,7 +240,7 @@ class _MeterHeader extends ConsumerWidget {
         const SizedBox(width: S.lg),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('SEM-1 · ${meter.id}', style: t.titleSmall),
+            Text('Bleu Meter · ${meter.shortId}', style: t.titleSmall),
             const SizedBox(height: 2),
             Text(
               [

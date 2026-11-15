@@ -1,4 +1,4 @@
-# BleuLand Energy cloud (Supabase)
+# Bleu Home cloud (Supabase)
 
 | | |
 |---|---|

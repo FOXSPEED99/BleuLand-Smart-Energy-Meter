@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- cloud -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Bluetooth: WiFi setup of a new SEM-1 (Android 12+) -->
+    <!-- Bluetooth: WiFi setup of a new Bleu Meter (Android 12+) -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- Bluetooth on Android 11 and older (scanning needs location there) -->
@@ -13,7 +13,7 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
-        android:label="BleuLand Energy"
+        android:label="Bleu Home"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

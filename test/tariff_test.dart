@@ -1,4 +1,4 @@
-import 'package:bleuland_energy/core/tariff.dart';
+import 'package:bleu_home/core/tariff.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

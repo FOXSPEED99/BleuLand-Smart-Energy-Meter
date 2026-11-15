@@ -1,4 +1,4 @@
-# BleuLand Energy: the SEM-1 app
+# Bleu Home: the Bleu Land app
 
 One Flutter codebase builds the **Android**, **iOS** and **web** versions. It has a dark design, with the teal and charcoal colours of the meter's front label.
 
@@ -18,7 +18,7 @@ One Flutter codebase builds the **Android**, **iOS** and **web** versions. It ha
 ## Get it on your Android phone (no tools needed)
 
 1. On GitHub, open the repository → **Actions** tab → **"App: Android APK"** → the newest green run.
-2. At the bottom, under **Artifacts**, download **BleuLand-Energy-APK** (a .zip), and unzip it to get `app-release.apk`.
+2. At the bottom, under **Artifacts**, download **Bleu-Home-APK** (a .zip), and unzip it to get `app-release.apk`.
 3. Copy it to your phone and open it. Android asks to allow *"install unknown apps"* for your file manager: allow it once.
 
 GitHub builds a new APK automatically whenever the app code changes.

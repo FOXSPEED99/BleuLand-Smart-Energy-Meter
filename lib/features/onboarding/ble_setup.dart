@@ -1,4 +1,4 @@
-// Talking to an SEM-1 in setup mode over Bluetooth LE.
+// Talking to a Bleu Meter in setup mode over Bluetooth LE.
 //
 // The meter runs Espressif's standard WiFi provisioning service. Each of its
 // "endpoints" (session, scan, config ...) is a GATT characteristic whose

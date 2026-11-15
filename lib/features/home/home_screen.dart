@@ -345,7 +345,7 @@ class _Header extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.home_rounded),
                 title: Text(m.name),
-                subtitle: Text(m.isOwner ? m.id : '${m.id} · shared with you'),
+                subtitle: Text(m.isOwner ? 'ID ${m.shortId}' : 'ID ${m.shortId} · shared with you'),
                 trailing: m.id == meter.id
                     ? const Icon(Icons.check_rounded, color: C.brand)
                     : null,
@@ -369,7 +369,7 @@ class _NoMeter extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: EmptyState(
       icon: Icons.electric_meter_rounded,
-      title: 'Add your SEM-1',
+      title: 'Add your Bleu Meter',
       body: 'Scan the QR code on the front of your meter. Setup takes about two minutes.',
       action: FilledButton.icon(
         onPressed: () => context.push('/add-meter'),

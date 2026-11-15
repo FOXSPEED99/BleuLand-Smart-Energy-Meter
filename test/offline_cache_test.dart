@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:bleuland_energy/data/offline_cache.dart';
-import 'package:bleuland_energy/data/providers.dart' show hasNetwork;
+import 'package:bleu_home/data/offline_cache.dart';
+import 'package:bleu_home/data/providers.dart' show hasNetwork;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

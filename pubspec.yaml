@@ -1,5 +1,5 @@
-name: bleuland_energy
-description: "BleuLand Energy: live home electricity monitor for the SEM-1 meter"
+name: bleu_home
+description: "Bleu Home: the Bleu Land app for Bleu smart devices (Bleu Meter first)"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -44,7 +44,7 @@ flutter:
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
 
-# App icon: the bolt mark from the SEM-1 front label (dart run flutter_launcher_icons)
+# App icon: the bolt mark from the Bleu Meter front label (dart run flutter_launcher_icons)
 flutter_launcher_icons:
   image_path: assets/images/icon.png
   android: true

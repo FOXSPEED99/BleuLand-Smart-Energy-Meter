@@ -8,10 +8,17 @@ Fox trimmed this repo to the software only. The PCB (Altium), BOM and enclosure 
 
 | Path | What |
 |---|---|
-| `/` (root) | The Android app **BleuLand Energy** (Flutter): `lib/`, `android/`, `test/`, `pubspec.yaml` |
+| `/` (root) | The Android app **Bleu Home** (Flutter): `lib/`, `android/`, `test/`, `pubspec.yaml` |
 | `firmware/` | ESP32 firmware (Arduino IDE sketch, PC tests, OTA publish script); `firmware/reference/` = the old test sketch |
 | `cloud/` | Supabase database setup (migrations, pending SQL) |
 | `.github/workflows/` | `app-android.yml` builds the APK; `firmware.yml` builds and publishes firmware for OTA |
+
+## Names (Nov 2026)
+
+- Company **Bleu Land**, website **bleu.land**. The plan is a family of smart devices that all live in one app.
+- App: **Bleu Home** (Android label, `AppConfig.appName`; Dart package `bleu_home`). The Android applicationId stays `com.bleuland.bleuland_energy` so updates install over the installed app.
+- This device: **Bleu Meter** (was "SEM-1"). Future: Bleu Plug, Bleu Switch, Bleu Sensor...
+- The meter serial stays `SEM1-XXXXXX` / Bluetooth `SEM1_XXXXXX` for now: it is the cloud `device_id`, in the QR code and tied to each meter's secret. The app shows only `XXXXXX` (`Meter.shortId`). Changing the serial prefix is a planned step before production labels (cloud migration + firmware + app). Firmware file names (`SEM1_Firmware`, `SEM1_FW_VERSION`, OTA board names) are internal and stay.
 
 ## Who you're working with
 
@@ -138,7 +145,7 @@ Platforms: **Android, iOS and web/desktop**, ideally from **one codebase**.
 Fox chose (Oct 2026):
 
 - **Cloud:** Supabase (org "BLEU LAND"), free plan. Project **bleuland-energy** (ref `rmgzpxwpowwzqewmiyaw`, eu-central-1 Frankfurt, closest to Syria). An empty project "sem1" (ref `qzebqybpcjcuownytabd`, Mumbai) was created by mistake and is paused; Fox can delete it. Schema applied and verified; see `cloud/README.md` (URL, publishable key, functions). The Supabase MCP `apply_migration` cancels any statement containing DELETE even when Fox approves, so keep DELETE out of migrations (`cloud/pending/` holds SQL for Fox to paste in the dashboard). This sandbox can't reach supabase.co (proxy 403); Fox confirmed it's reachable from Syria without a VPN. Default tariff: 300 kWh at 6, then 14 new SYP/kWh per 2-month cycle. Ask before any paid plan.
-- **Market:** **Syria** first (not the Gulf): currency SYP, time zone Asia/Damascus, tariff brackets entered by the user (no guessed prices). App **English only** for now. App name **BleuLand Energy**, **dark theme only**.
+- **Market:** **Syria** first (not the Gulf): currency SYP, time zone Asia/Damascus, tariff brackets entered by the user (no guessed prices). App **English only** for now. App name **Bleu Home** (was BleuLand Energy), **dark theme only**.
 - **Scope (Fox):** the meter measures the whole house's consumption from the city grid, i.e. what's on the electricity bill. No generator/solar features.
 - **App:** Flutter. Android only for now (Nov 2026: the repo was trimmed to the Android app; `flutter create --platforms=ios,web .` brings the other platforms back).
 - **Firmware:** built with the **Arduino IDE** (Fox's choice, replacing PlatformIO) on board package esp32 **3.x** (tested 3.3.12; Fox has 3.x; 2.0.17 also compiles via the `ESP_ARDUINO_VERSION_MAJOR` shims in net.cpp; verified builds on 2.0.17, 3.3.4, 3.3.12). net.cpp defines `extern "C" bool btInUse(){return true;}` (plus `esp32-hal-alloc-ble-mem.h` only when it exists, 3.3.9+) so no core version frees BLE memory at boot; without it the 2.0.17 DevKit build linked the core's weak `false` version and BLE setup would have failed, + ArduinoJson 7.x. Sketch: `firmware/SEM1_Firmware/SEM1_Firmware.ino` (only setup()/loop() calling sem1Setup()/sem1Loop() in main.cpp); all code files sit flat in the sketch folder so Fox sees them as IDE tabs (keep it that way); board and CT are picked automatically from `CONFIG_IDF_TARGET_*`; the sketch-folder `partitions.csv` is used automatically; its app slots (2 x 0x1F0000) equal the IDE's "No FS 4MB (2MB APP x2)" scheme (Fox must select it) so the IDE size check is exact; no coredump partition (dropped for room) and no mDNS (removed, ~37 KB). Stage 2 overflowed "Minimal SPIFFS" on Fox's 3.x core (1,985,389 > 1,966,080), hence this layout. Sizes on 3.3.12: C3 1.57 MB (77%), DevKit 1.92 MB (94%) of 2,031,616 bytes. PC tests: `sh firmware/test/run_tests.sh`.

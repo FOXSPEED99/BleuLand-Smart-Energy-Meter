@@ -7,7 +7,7 @@ import 'models.dart';
 import 'offline_cache.dart';
 import 'repository.dart';
 
-/// Real data from the BleuLand Energy cloud. Row-level security on the server
+/// Real data from the Bleu Home cloud. Row-level security on the server
 /// makes sure a user only ever receives meters they own or that were shared.
 /// Meters, energy, the 24 h power and alerts are also kept on the phone
 /// ([OfflineCache]) so they still show without internet.

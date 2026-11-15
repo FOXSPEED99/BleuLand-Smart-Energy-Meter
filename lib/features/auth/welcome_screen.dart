@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config.dart';
 import '../../data/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
@@ -34,7 +35,7 @@ class WelcomeScreen extends ConsumerWidget {
               Row(children: [
                 const BrandMark(size: 44),
                 const SizedBox(width: S.md),
-                Text('BleuLand Energy', style: t.titleMedium),
+                Text(AppConfig.appName, style: t.titleMedium),
               ]),
               const Spacer(),
               const _Preview(),

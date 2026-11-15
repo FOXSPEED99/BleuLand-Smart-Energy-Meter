@@ -1,6 +1,6 @@
-# Builds the BleuLand Energy Android app on every change to the app code.
+# Builds the Bleu Home Android app on every change to the app code.
 # Download it from the run's page: Actions -> "App: Android APK" -> latest run
-# -> Artifacts -> "BleuLand-Energy-APK".
+# -> Artifacts -> "Bleu-Home-APK".
 name: "App: Android APK"
 
 on:
@@ -72,7 +72,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BleuLand-Energy-APK
+          name: Bleu-Home-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 

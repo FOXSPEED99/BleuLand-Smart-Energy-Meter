@@ -195,7 +195,7 @@ class _AddMeterScreenState extends ConsumerState<AddMeterScreen> {
         child: EmptyState(
           icon: Icons.science_outlined,
           title: 'You\'re in the demo',
-          body: 'Create an account to add your own SEM-1. Your meter\'s data stays private to you and the people you invite.',
+          body: 'Create an account to add your own Bleu Meter. Your meter\'s data stays private to you and the people you invite.',
           action: FilledButton(
             onPressed: () {
               ref.read(demoModeProvider.notifier).set(false);
@@ -212,7 +212,7 @@ class _AddMeterScreenState extends ConsumerState<AddMeterScreen> {
       case _Step.intro:
         return SetupPage(
           icon: Icons.electric_meter_rounded,
-          title: 'Let\'s connect your SEM-1',
+          title: 'Let\'s connect your Bleu Meter',
           body: 'Power the meter on. When its blue WiFi light blinks slowly, it\'s ready. '
               'Keep your phone close to it, with Bluetooth on.',
           children: [
@@ -282,7 +282,7 @@ class _AddMeterScreenState extends ConsumerState<AddMeterScreen> {
             TextField(
               controller: idCtrl,
               textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(labelText: 'Meter ID', hintText: 'SEM1-8B6204'),
+              decoration: const InputDecoration(labelText: 'Meter ID', hintText: '8B6204'),
             ),
             const SizedBox(height: S.md),
             TextField(

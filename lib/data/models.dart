@@ -17,7 +17,9 @@ class Meter {
     this.voltMax = 230,
   });
 
-  final String id; // "SEM1-8B6204"
+  final String id; // serial, "SEM1-8B6204" (internal: cloud, Bluetooth, QR)
+  /// What people see: "8B6204".
+  String get shortId => id.startsWith('SEM1-') ? id.substring(5) : id;
   final String name; // "My home"
   final String role; // owner | member
   final String? fw;
