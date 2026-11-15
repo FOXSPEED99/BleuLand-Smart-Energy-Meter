@@ -9,7 +9,7 @@ phone writes the app name under the icon anyway.
 from PIL import Image, ImageDraw
 
 LOGO_BG = (0, 0, 25)                 # the navy in the logo file, #000019
-BG = (6, 9, 42)                      # icon background: the logo navy, a touch lighter so it reads on black, #06092A
+BG = (3, 5, 34)                      # icon background: the logo navy, a touch lighter so it reads on black, #030522
 SYMBOL_BOX = (524, 324, 1482, 1676)  # the circuit "B" in the source, incl. its glow
 TEXT_BOX = (552, 510, 606, 1478)     # the vertical text, painted over
 
