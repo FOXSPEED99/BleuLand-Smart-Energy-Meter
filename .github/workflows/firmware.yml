@@ -9,14 +9,14 @@ name: "Firmware: build & publish"
 on:
   push:
     paths:
-      - "Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/**"
+      - "firmware/**"
       - ".github/workflows/firmware.yml"
   workflow_dispatch:
 
 env:
   CORE: "esp32:esp32@3.3.12"
   INDEX: "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
-  SKETCH: "Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/SEM1_Firmware"
+  SKETCH: "firmware/SEM1_Firmware"
 
 jobs:
   build:
@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 50  # the release note is the last firmware commit's title
 
       - name: Unit tests (metering core)
-        run: sh Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/test/run_tests.sh
+        run: sh firmware/test/run_tests.sh
 
       - uses: arduino/setup-arduino-cli@v2
 
@@ -68,6 +68,6 @@ jobs:
         run: |
           CHANNEL=beta
           [ "$GITHUB_REF" = "refs/heads/main" ] && CHANNEL=stable
-          sh Bleu-Land/Smart-Energy-Meter/SEM1-Firmware/tools/publish.sh "$CHANNEL" \
+          sh firmware/tools/publish.sh "$CHANNEL" \
             SEM1-proto-devkit out/devkit/SEM1_Firmware.ino.bin \
             SEM1-C3 out/c3/SEM1_Firmware.ino.bin

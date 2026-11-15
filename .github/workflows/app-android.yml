@@ -5,17 +5,18 @@ name: "App: Android APK"
 
 on:
   push:
-    paths:
-      - "Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/**"
-      - ".github/workflows/app-android.yml"
+    paths-ignore:
+      # the app is the repo root: anything but the firmware, the cloud and the docs
+      - "firmware/**"
+      - "cloud/**"
+      - "**.md"
+      - ".github/workflows/firmware.yml"
+      - ".claude/**"
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +41,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/android/**/*.gradle.kts', 'Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/android/gradle.properties', 'Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/android/gradle/wrapper/gradle-wrapper.properties', 'Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/pubspec.lock') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle.properties', 'android/gradle/wrapper/gradle-wrapper.properties', 'pubspec.lock') }}
           restore-keys: gradle-${{ runner.os }}-
 
       - name: Get packages
@@ -72,7 +73,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BleuLand-Energy-APK
-          path: Bleu-Land/Smart-Energy-Meter/BleuLand-Energy-App/build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
       # For checking which key signed it (the permanent key's SHA-256 starts 74:24:38:5D).

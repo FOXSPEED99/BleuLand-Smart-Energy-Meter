@@ -51,7 +51,7 @@ lib/
 test/tariff_test.dart         bill calculation tests
 ```
 
-- **Cloud:** Supabase project `bleuland-energy` (Frankfurt). See `../SEM1-Cloud/README.md`. Live values arrive by real-time subscription: every 2 s while Home is on screen (the app tells the cloud it's watching every 25 s), otherwise every 10 s. Numbers glide between readings.
+- **Cloud:** Supabase project `bleuland-energy` (Frankfurt). See `cloud/README.md`. Live values arrive by real-time subscription: every 2 s while Home is on screen (the app tells the cloud it's watching every 25 s), otherwise every 10 s. Numbers glide between readings.
 - **Bluetooth setup:** `esp_provisioning_ble` (Espressif's protocol, MIT licence) over `universal_ble` (BSD licence, free for companies).
   - `flutter_blue_plus` was **not** used: it needs a paid licence for companies.
 - **Charts:** `fl_chart`. Colours were checked with a colour-blindness and contrast validator:

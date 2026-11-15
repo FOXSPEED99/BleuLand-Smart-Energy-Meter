@@ -1,6 +1,6 @@
 # SEM-1 production firmware
 
-This is the "real" firmware for the SEM-1, replacing `SEM1-App/reference/SEM1_Test.ino`.
+This is the "real" firmware for the SEM-1, replacing `reference/SEM1_Test.ino`.
 It builds for two boards:
 
 | Arduino IDE board (Tools > Board) | Hardware | CT |
@@ -85,7 +85,7 @@ Your old test firmware builds on 3.x as well.
 
 ## Build and flash the prototype
 
-1. **File → Open…** → open `SEM1-Firmware/SEM1_Firmware/SEM1_Firmware.ino`.
+1. **File → Open…** → open `firmware/SEM1_Firmware/SEM1_Firmware.ino`.
    - The other files open as **tabs** along the top (`main.cpp`, `hlw8032.cpp`, …).
    - When you press Upload, the IDE compiles **all** the tabs together.
    - The `.ino` only has `setup()` and `loop()`; they call `sem1Setup()` / `sem1Loop()` in `main.cpp`, where the real start-up code is.

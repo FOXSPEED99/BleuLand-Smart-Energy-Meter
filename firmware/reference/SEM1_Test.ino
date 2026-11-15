@@ -7,7 +7,7 @@
   - OTA updates over WiFi (no USB cable needed after the first flash)
   - Checks that the DS1307 RTC answers on I2C
 
-  Pins come from the SEM-1 schematic (Energy-Meter.SchDoc):
+  Pins come from the SEM-1 schematic (Altium, kept outside this repo):
     HLW8032 TX -> R11 1k / R6 2k divider -> IO16
     Blue LED  D1 -> IO19 (active LOW)
     White LED D2 -> IO18 (active LOW)
