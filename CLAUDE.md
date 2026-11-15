@@ -21,6 +21,7 @@ Fox trimmed this repo to the software only. The PCB (Altium), BOM and enclosure 
   - When he says "I want to learn", explain thoroughly instead of just doing it.
 - Ask before anything that costs money or is hard to undo. That includes paid cloud plans, app-store accounts (Apple $99/yr, Google $25 once), domain names, and choosing a database or vendor.
 - If an important detail is missing, ask. Use short multiple-choice questions where possible.
+- **Every update goes to `main` too** (Fox, Nov 2026): he doesn't merge or pull by hand. After pushing the working branch, fast-forward `main` to the same commit (`git push origin HEAD:main`). Firmware changes on `main` publish as **stable** OTA (all meters), so bump `SEM1_FW_VERSION` and test on the branch (beta) first.
 
 ## The product
 
